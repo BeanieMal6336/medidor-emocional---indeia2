@@ -12,6 +12,7 @@ import '../../../../core/widgets/streak_badge.dart';
 import '../../../../app/router/app_router.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
+import '../../../../core/services/progression_service.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -245,6 +246,9 @@ class _XpSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profileAsync = ref.watch(userProfileNotifierProvider);
+    final moods = ref.watch(moodNotifierProvider).value ?? [];
+    final missions = ref.watch(missionsProvider);
+    final claimed = [...missions.daily, ...missions.weekly].where((m) => m.isClaimed).length;
 
     return profileAsync.when(
       loading: () => const SizedBox(
@@ -253,12 +257,50 @@ class _XpSection extends ConsumerWidget {
       ),
       error: (e, __) => const SizedBox(),
       data: (profile) {
+        final journey = buildJourneyStats(
+          profile: profile,
+          moodEntriesCount: moods.length,
+          claimedMissionsCount: claimed,
+        );
         return GlassCard(
-          child: XpBar(
-            currentXp: profile.totalXp,
-            maxXp: profile.totalXp + profile.xpToNextLevel,
-            levelLabel: profile.level.label,
-            levelEmoji: profile.level.emoji,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Dia ${journey.daysOnJourney} da jornada',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  Text(
+                    'Próximo: ${journey.nextLevelLabel}',
+                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              XpBar(
+                currentXp: profile.totalXp,
+                maxXp: profile.totalXp + journey.xpToNext,
+                levelLabel: profile.level.label,
+                levelEmoji: profile.level.emoji,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                journey.insight,
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.3),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${journey.moodEntries} registros · ${journey.claimedMissions} missões concluídas',
+                style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+              ),
+            ],
           ),
         );
       },

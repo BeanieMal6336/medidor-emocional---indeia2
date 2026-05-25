@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/utils/user_session.dart';
 
 part 'auth_provider.g.dart';
 
@@ -55,8 +56,8 @@ class AuthNotifier extends _$AuthNotifier {
           await settingsBox.put('current_offline_user_id', userMap['id']);
           await settingsBox.put('current_offline_user_email', email);
           await settingsBox.put('current_offline_user_name', userMap['name']);
-          
-          state = const AsyncValue.data(null); // Sem usuário Supabase (modo offline ativo)
+          invalidateUserScopedProviders(ref);
+          state = const AsyncValue.data(null);
           return;
         } else {
           state = AsyncValue.error('Senha incorreta localmente.', st);
@@ -81,20 +82,10 @@ class AuthNotifier extends _$AuthNotifier {
     // para garantir que novo usuário começa do zero
     final previousId = settingsBox.get('current_offline_user_id') as String?;
     if (previousId != null && previousId != localId) {
-      await userBox.delete(previousId); // remove perfil antigo
-      // limpa missões do usuário anterior (missions_box abre sob demanda)
-      try {
-        final missionsBox = Hive.box('missions_box');
-        final oldKeys = missionsBox.keys
-            .where((k) => k.toString().startsWith(previousId))
-            .toList();
-        for (final k in oldKeys) {
-          await missionsBox.delete(k);
-        }
-      } catch (_) {
-        // missions_box pode não estar aberto ainda — ignora
-      }
+      await userBox.delete(previousId);
+      await clearUserScopedData(previousId);
     }
+    await clearUserScopedData(localId);
 
     // Sempre salvar credenciais localmente primeiro (banco de dados local de cadastro)
     final credentials = {
@@ -104,6 +95,17 @@ class AuthNotifier extends _$AuthNotifier {
       'password': password,
     };
     await userBox.put('credentials_$email', jsonEncode(credentials));
+    final freshProfile = {
+      'id': localId,
+      'email': email,
+      'name': name,
+      'total_xp': 0,
+      'current_streak': 0,
+      'longest_streak': 0,
+      'created_at': DateTime.now().toIso8601String(),
+      'is_onboarding_done': false,
+    };
+    await userBox.put(localId, jsonEncode(freshProfile));
 
     // Registrar e-mail no banco de dados local
     final registryList = settingsBox.get('offline_email_registry', defaultValue: <dynamic>[]) as List;
@@ -132,8 +134,8 @@ class AuthNotifier extends _$AuthNotifier {
       await settingsBox.put('current_offline_user_id', localId);
       await settingsBox.put('current_offline_user_email', email);
       await settingsBox.put('current_offline_user_name', name);
-      
-      state = const AsyncValue.data(null); // Sem usuário Supabase (modo offline ativo)
+      invalidateUserScopedProviders(ref);
+      state = const AsyncValue.data(null);
     }
   }
 
@@ -165,7 +167,8 @@ class AuthNotifier extends _$AuthNotifier {
     await settingsBox.put('current_offline_user_id', localId);
     await settingsBox.put('current_offline_user_email', email);
     await settingsBox.put('current_offline_user_name', name);
-    
+    await clearUserScopedData(localId);
+    invalidateUserScopedProviders(ref);
     state = const AsyncValue.data(null);
   }
 

@@ -114,7 +114,7 @@ class AudioService {
     if (_contextReady) return;
     if (!kIsWeb) {
       await AudioPlayer.global.setAudioContext(
-        const AudioContext(
+        AudioContext(
           android: AudioContextAndroid(
             isSpeakerphoneOn: true,
             stayAwake: true,
@@ -124,7 +124,7 @@ class AudioService {
           ),
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.playback,
-            options: [AVAudioSessionOptions.mixWithOthers],
+            options: const [AVAudioSessionOptions.mixWithOthers],
           ),
         ),
       );
