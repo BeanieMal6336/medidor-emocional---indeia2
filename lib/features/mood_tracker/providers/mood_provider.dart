@@ -232,7 +232,7 @@ class MoodNotifier extends _$MoodNotifier {
     await userProfileNotifier.addXp(xpEarned);
     await userProfileNotifier.updateStreak();
 
-    // Salvar no Supabase em segundo plano
+    final supabaseUser = ref.read(currentUserProvider);
     if (supabaseUser != null) {
       try {
         final supabase = ref.read(supabaseClientProvider);

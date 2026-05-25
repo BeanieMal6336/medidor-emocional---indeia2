@@ -467,37 +467,43 @@ O que disparou isso?''';
 Qual pensamento está mais alto agora?''';
   }
 
+  String _nameComma(MindoUserContext user) =>
+      user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+
+  String _nameLine(MindoUserContext user) =>
+      user.displayName.isNotEmpty ? '${user.displayName}\n' : '';
+
   String _sadness(String input, MindoUserContext user) {
-    final name = user.displayName.isNotEmpty ? '$name, ' : '';
+    final prefix = _nameComma(user);
     if (_containsAny(input, ['depressão', 'depressao', 'deprimid', 'sem esperança'])) {
-      return '''${name}obrigado por confiar. 🫂 Isso é sofrimento real, não fraqueza.
+      return '''${prefix}obrigado por confiar. 🫂 Isso é sofrimento real, não fraqueza.
 
 Há quanto tempo? Está comendo e dormindo?
 
 Se persistir, apoio profissional ajuda muito. O que pesa mais hoje?''';
     }
-    return '''${name}tristeza mostra que algo importava. 🫂 Não precisa estar bem agora.
+    return '''${prefix}tristeza mostra que algo importava. 🫂 Não precisa estar bem agora.
 
 O que aconteceu?''';
   }
 
   String _anger(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
-    return '''$n raiva sinaliza limite cruzado. 💜 Você está seguro(a)?
+    final prefix = _nameComma(user);
+    return '''$prefix raiva sinaliza limite cruzado. 💜 Você está seguro(a)?
 
 Respire 3× devagar. O que aconteceu?''';
   }
 
   String _loneliness(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n buscar apoio aqui já é coragem. 💜
+    final prefix = _nameLine(user);
+    return '''$prefix buscar apoio aqui já é coragem. 💜
 
 Solidão física ou de não ser compreendido(a)?''';
   }
 
   String _stress(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n estresse acumulado tem limite. 💜
+    final prefix = _nameLine(user);
+    return '''$prefix estresse acumulado tem limite. 💜
 
 30s: olhos fechados, ombros soltos.
 
@@ -505,8 +511,8 @@ O que pesa mais — trabalho, relações ou tudo?''';
   }
 
   String _fear(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n medo tenta proteger. 💜 É algo específico ou difuso?
+    final prefix = _nameLine(user);
+    return '''$prefix medo tenta proteger. 💜 É algo específico ou difuso?
 
 Pergunte: probabilidade real? Como eu lidaria se acontecesse?
 
@@ -514,26 +520,26 @@ Do que tem medo agora?''';
   }
 
   String _positive(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+    final prefix = _nameComma(user);
     final streak = user.currentStreak >= 3 ? ' 🔥 ${user.currentStreak} dias de sequência!' : '';
-    return '''$n que energia boa! 🌟 Registre no humor do app.$streak
+    return '''$prefix que energia boa! 🌟 Registre no humor do app.$streak
 
 O que contribuiu para esse bem-estar?''';
   }
 
   String _relationship(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n relacionamentos tocam o vulnerável. 💜 Conte sem filtro o que está acontecendo.''';
+    final prefix = _nameLine(user);
+    return '''$prefix relacionamentos tocam o vulnerável. 💜 Conte sem filtro o que está acontecendo.''';
   }
 
   String _family(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n família é complexa — amor e história juntos. 💜 O que está pesando?''';
+    final prefix = _nameLine(user);
+    return '''$prefix família é complexa — amor e história juntos. 💜 O que está pesando?''';
   }
 
   String _work(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n trabalho/estudo drenam quando pressionam demais. 💜
+    final prefix = _nameLine(user);
+    return '''$prefix trabalho/estudo drenam quando pressionam demais. 💜
 
 É pontual ou acumulado há tempo?''';
   }
@@ -542,8 +548,8 @@ O que contribuiu para esse bem-estar?''';
       '''**Box 4-4-4-4** ou diga **"meditação guiada"** para condução completa. 🧘''';
 
   String _gratitude(MindoUserContext user) {
-    final n = user.displayName.isNotEmpty ? '$n' : '';
-    return '''$n fico feliz em apoiar — o mérito é seu por cuidar de si. 💜
+    final prefix = _nameLine(user);
+    return '''$prefix fico feliz em apoiar — o mérito é seu por cuidar de si. 💜
 
 Como está agora, depois de conversar?''';
   }
@@ -552,16 +558,16 @@ Como está agora, depois de conversar?''';
       '''Tudo bem não saber o que sente. 💜 Onde no corpo há sensação agora?''';
 
   String _empathetic(int index, MindoUserContext user, MindoConversationState state) {
-    final n = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+    final prefix = _nameComma(user);
     final pool = [
-      '${n}o que você trouxe importa. 💜 O que sente no corpo neste instante?',
-      '${n}estou acompanhando com atenção plena. 💜 O que aconteceu antes desse estado?',
-      '${n}se pudesse mudar uma coisa hoje, qual seria?',
-      '${n}quer **meditação guiada**, técnica **CBT** (pensamento negativo) ou continuar conversando?',
-      '${n}leio sua mensagem como alguém que precisa ser ouvido(a) sem pressa — pode continuar.',
+      '${prefix}o que você trouxe importa. 💜 O que sente no corpo neste instante?',
+      '${prefix}estou acompanhando com atenção plena. 💜 O que aconteceu antes desse estado?',
+      '${prefix}se pudesse mudar uma coisa hoje, qual seria?',
+      '${prefix}quer **meditação guiada**, técnica **CBT** (pensamento negativo) ou continuar conversando?',
+      '${prefix}leio sua mensagem como alguém que precisa ser ouvido(a) sem pressa — pode continuar.',
     ];
     if (state.rapportLevel >= 4) {
-      return '''${n}já estamos construindo um fio de confiança nesta conversa. 💜
+      return '''${prefix}já estamos construindo um fio de confiança nesta conversa. 💜
 
 Não preciso de internet para te acompanhar — uso memória da sessão, técnicas validadas e o contexto do seu perfil no MindFlow.
 
