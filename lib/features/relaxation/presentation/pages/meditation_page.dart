@@ -3,13 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/services/audio_service.dart';
+import '../../../../core/utils/navigation_utils.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 
@@ -39,17 +38,29 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
     super.dispose();
   }
 
-  void _startMeditation(String title, RelaxationTrack soundTrack) {
+  Future<void> _startMeditation(String title, RelaxationTrack soundTrack) async {
     setState(() {
       _isPlaying = true;
-      _secondsLeft = 300; // 5 minutos
+      _secondsLeft = 300;
       _meditationTitle = title;
       _breathingText = 'Inspire...';
       _breathScale = 1.6;
     });
-
-    // Tocar áudio de fundo
-    ref.read(audioPlayerStateProvider.notifier).play(soundTrack);
+    try {
+      await ref.read(audioPlayerStateProvider.notifier).play(soundTrack);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isPlaying = false);
+      _timer?.cancel();
+      _breathingCycleTimer?.cancel();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível carregar o áudio desta sessão.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     // Iniciar temporizador da sessão
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -171,6 +182,7 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
                   label: 'Voltar ao MindFlow',
                   onPressed: () {
                     Navigator.pop(context);
+                    popOrGoDashboard(context);
                   },
                 ),
               ],
@@ -244,7 +256,7 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
                     children: [
                       IconButton(
                         icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
-                        onPressed: () => context.pop(),
+                        onPressed: () => popOrGoDashboard(context),
                       ),
                       const Text(
                         'Meditação Flow',
@@ -428,25 +440,33 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
     ).animate().fadeIn().slideY(begin: 0.1);
   }
 
+  Future<bool> _confirmLeaveSession() async {
+    final shouldLeave = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sair da meditação?'),
+        content: const Text('Deseja encerrar a sessão em andamento?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Continuar')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sair')),
+        ],
+      ),
+    );
+    if (shouldLeave == true) {
+      _abortMeditation();
+      return true;
+    }
+    return false;
+  }
+
   Widget _buildActiveMeditationView() {
-    return WillPopScope(
-      onWillPop: () async {
-        final shouldPop = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Cancelar Meditação?'),
-            content: const Text('Deseja realmente cancelar a sessão de meditação?'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Não')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sim')),
-            ],
-          ),
-        );
-        if (shouldPop == true) {
-          _abortMeditation();
-          return true;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (await _confirmLeaveSession() && mounted) {
+          popOrGoDashboard(context);
         }
-        return false;
       },
       child: Scaffold(
         backgroundColor: AppColors.bgDark,
@@ -490,27 +510,38 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Column(
+                    Row(
                       children: [
-                        Text(
-                          _meditationTitle.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            letterSpacing: 2.0,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.emotionCalm,
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
+                          onPressed: () async {
+                            if (await _confirmLeaveSession() && mounted) {
+                              popOrGoDashboard(context);
+                            }
+                          },
+                        ),
+                        Expanded(
+                          child: Text(
+                            _meditationTitle.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              letterSpacing: 2.0,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.emotionCalm,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Respiração Consciente',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
+                        const SizedBox(width: 48),
                       ],
+                    ),
+                    const Text(
+                      'Respiração Consciente',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     Column(
                       children: [

@@ -1,23 +1,21 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// ── Provider global do serviço de áudio ────────────────────────────────────
 final audioServiceProvider = Provider<AudioService>((ref) {
   final service = AudioService();
   ref.onDispose(service.dispose);
   return service;
 });
 
-// ── Estado do player ────────────────────────────────────────────────────────
 class AudioPlayerState {
   final bool isPlaying;
   final String? currentTrackId;
   final String? currentTrackName;
   final String? currentTrackEmoji;
   final double volume;
-  final int? timerMinutes; // timer de sono
-
+  final int? timerMinutes;
   const AudioPlayerState({
     this.isPlaying = false,
     this.currentTrackId,
@@ -26,7 +24,6 @@ class AudioPlayerState {
     this.volume = 0.7,
     this.timerMinutes,
   });
-
   AudioPlayerState copyWith({
     bool? isPlaying,
     String? currentTrackId,
@@ -35,12 +32,13 @@ class AudioPlayerState {
     double? volume,
     int? timerMinutes,
     bool clearTimer = false,
+    bool clearTrack = false,
   }) =>
       AudioPlayerState(
         isPlaying: isPlaying ?? this.isPlaying,
-        currentTrackId: currentTrackId ?? this.currentTrackId,
-        currentTrackName: currentTrackName ?? this.currentTrackName,
-        currentTrackEmoji: currentTrackEmoji ?? this.currentTrackEmoji,
+        currentTrackId: clearTrack ? null : currentTrackId ?? this.currentTrackId,
+        currentTrackName: clearTrack ? null : currentTrackName ?? this.currentTrackName,
+        currentTrackEmoji: clearTrack ? null : currentTrackEmoji ?? this.currentTrackEmoji,
         volume: volume ?? this.volume,
         timerMinutes: clearTimer ? null : timerMinutes ?? this.timerMinutes,
       );
@@ -54,7 +52,6 @@ final audioPlayerStateProvider =
 class AudioStateNotifier extends StateNotifier<AudioPlayerState> {
   final AudioService _service;
   Timer? _sleepTimer;
-
   AudioStateNotifier(this._service) : super(const AudioPlayerState());
 
   Future<void> play(RelaxationTrack track) async {
@@ -100,26 +97,49 @@ class AudioStateNotifier extends StateNotifier<AudioPlayerState> {
     state = state.copyWith(volume: vol);
   }
 
-  void togglePlayPause() {
+  Future<void> togglePlayPause() async {
     if (state.isPlaying) {
-      pause();
+      await pause();
     } else {
-      resume();
+      await resume();
     }
   }
 }
 
-// ── Serviço de áudio ───────────────────────────────────────────────────────
 class AudioService {
   final AudioPlayer _player = AudioPlayer();
+  bool _contextReady = false;
+
+  Future<void> _ensureAudioContext() async {
+    if (_contextReady) return;
+    if (!kIsWeb) {
+      await AudioPlayer.global.setAudioContext(
+        const AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: [AVAudioSessionOptions.mixWithOthers],
+          ),
+        ),
+      );
+    }
+    _contextReady = true;
+  }
 
   Future<void> play(String url, {double volume = 0.7}) async {
+    await _ensureAudioContext();
     await _player.stop();
-    await _player.setVolume(volume);
     await _player.setReleaseMode(ReleaseMode.loop);
-    
+    await _player.setVolume(volume.clamp(0.0, 1.0));
     if (url.startsWith('assets/')) {
-      await _player.play(AssetSource(url.replaceFirst('assets/', '')));
+      final assetPath = url.replaceFirst('assets/', '');
+      await _player.play(AssetSource(assetPath));
     } else {
       await _player.play(UrlSource(url));
     }
@@ -128,14 +148,12 @@ class AudioService {
   Future<void> pause() => _player.pause();
   Future<void> resume() => _player.resume();
   Future<void> stop() => _player.stop();
-  Future<void> setVolume(double vol) => _player.setVolume(vol);
-
+  Future<void> setVolume(double vol) => _player.setVolume(vol.clamp(0.0, 1.0));
   void dispose() {
     _player.dispose();
   }
 }
 
-// ── Catálogo de faixas de relaxamento ──────────────────────────────────────
 class RelaxationTrack {
   final String id;
   final String name;
@@ -143,7 +161,6 @@ class RelaxationTrack {
   final String url;
   final String description;
   final String category;
-
   const RelaxationTrack({
     required this.id,
     required this.name,

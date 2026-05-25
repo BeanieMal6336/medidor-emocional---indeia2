@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/services/audio_service.dart';
+import '../../../../core/utils/navigation_utils.dart';
 
 class RelaxationMusicPage extends ConsumerStatefulWidget {
   const RelaxationMusicPage({super.key});
@@ -88,7 +87,10 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
-                              onPressed: () => context.pop(),
+                              onPressed: () {
+                                ref.read(audioPlayerStateProvider.notifier).stop();
+                                popOrGoDashboard(context);
+                              },
                             ),
                             const Text(
                               'Sons de Cura',
@@ -191,11 +193,21 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
                             padding: EdgeInsets.zero,
                             child: ListTile(
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              onTap: () {
-                                if (isCurrent) {
-                                  audioNotifier.togglePlayPause();
-                                } else {
-                                  audioNotifier.play(track);
+                              onTap: () async {
+                                try {
+                                  if (isCurrent) {
+                                    await audioNotifier.togglePlayPause();
+                                  } else {
+                                    await audioNotifier.play(track);
+                                  }
+                                } catch (_) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Não foi possível reproduzir "${track.name}".'),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
                                 }
                               },
                               leading: Container(
@@ -325,7 +337,7 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
                 onPressed: () => audioNotifier.stop(),
               ),
               GestureDetector(
-                onTap: () => audioNotifier.togglePlayPause(),
+                onTap: () async => audioNotifier.togglePlayPause(),
                 child: Container(
                   width: 44,
                   height: 44,

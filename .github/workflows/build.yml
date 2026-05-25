@@ -22,6 +22,8 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
+      - name: Generate app icons
+        run: dart run flutter_launcher_icons
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses
       - name: Decode keystore
@@ -61,6 +63,8 @@ jobs:
         run: flutter config --enable-windows-desktop
       - name: Install dependencies
         run: flutter pub get
+      - name: Generate app icons
+        run: dart run flutter_launcher_icons
       - name: Build Windows
         run: flutter build windows --release
       - name: Package Windows build

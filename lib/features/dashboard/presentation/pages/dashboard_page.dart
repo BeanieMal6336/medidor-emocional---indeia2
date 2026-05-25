@@ -752,7 +752,7 @@ class _RelaxationMeditationCard extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => context.go(AppRoutes.meditation),
+                  onPressed: () => context.push(AppRoutes.meditation),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary.withOpacity(0.3),
                     foregroundColor: Colors.white,
@@ -772,7 +772,7 @@ class _RelaxationMeditationCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => context.go(AppRoutes.relaxation),
+                  onPressed: () => context.push(AppRoutes.relaxation),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accentGreen.withOpacity(0.2),
                     foregroundColor: Colors.white,
