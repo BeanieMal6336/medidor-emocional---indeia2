@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ── Provider global do serviço de áudio ────────────────────────────────────
@@ -120,7 +119,6 @@ class AudioService {
     await _player.setReleaseMode(ReleaseMode.loop);
     
     if (url.startsWith('assets/')) {
-      final bytes = await rootBundle.load(url);
       await _player.play(AssetSource(url.replaceFirst('assets/', '')));
     } else {
       await _player.play(UrlSource(url));
