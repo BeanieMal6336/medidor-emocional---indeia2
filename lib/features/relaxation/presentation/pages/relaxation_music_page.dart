@@ -43,9 +43,14 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primary.withOpacity(0.15),
-                blurRadius: 100,
-              ) as BoxDecoration,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.15),
+                    blurRadius: 100,
+                    spreadRadius: 50,
+                  ),
+                ],
+              ),
             ),
           ),
           Positioned(
@@ -56,9 +61,14 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
               height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.secondary.withOpacity(0.1),
-                blurRadius: 80,
-              ) as BoxDecoration,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.secondary.withOpacity(0.1),
+                    blurRadius: 80,
+                    spreadRadius: 40,
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -369,7 +379,7 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
         size: 20,
       ),
       tooltip: 'Temporizador de Sono',
-      backgroundColor: AppColors.bgMedium,
+      color: AppColors.bgMedium,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: const BorderSide(color: AppColors.glassBorder),

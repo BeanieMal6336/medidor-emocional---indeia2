@@ -221,9 +221,14 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.emotionCalm.withOpacity(0.15),
-                blurRadius: 120,
-              ) as BoxDecoration,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.emotionCalm.withOpacity(0.15),
+                    blurRadius: 120,
+                    spreadRadius: 60,
+                  ),
+                ],
+              ),
             ),
           ),
 
