@@ -28,7 +28,7 @@ android {
     signingConfigs {
         create("release") {
             keyAlias = System.getenv("KEY_ALIAS") ?: "mindflow_release_key"
-            keyPassword = System.getenv("KEY_PASSWORD")?.toCharArray()
+            keyPassword = System.getenv("KEY_PASSWORD")
             storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
             storePassword = System.getenv("KEYSTORE_PASSWORD")
         }
