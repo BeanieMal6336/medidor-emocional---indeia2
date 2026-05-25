@@ -343,11 +343,22 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     return days.length;
   }
 
-  int _isoWeekNumber(DateTime date) {
-    final dayOfYear = int.parse(
-        '${date.difference(DateTime(date.year, 1, 1)).inDays}');
+int _isoWeekNumber(DateTime date) {
+    final dayOfYear = date.difference(DateTime(date.year, 1, 1)).inDays;
     return ((dayOfYear - date.weekday + 10) / 7).floor();
   }
+
+  /// Reseta todas as missões e garante estado limpo para novo usuário
+  Future<void> resetAndClearAll() async {
+    // Remove todas as chaves da box
+    final keysToDelete = _missionsBox.keys.toList();
+    for (final k in keysToDelete) {
+      await _missionsBox.delete(k);
+    }
+    // Recarrega com estado zerado
+    await _load();
+  }
+}
 
   /// Chamado quando o usuário envia mensagem para o Mindo
   Future<void> onMindoMessageSent() async {

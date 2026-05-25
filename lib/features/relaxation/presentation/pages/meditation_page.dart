@@ -429,162 +429,172 @@ class _MeditationPageState extends ConsumerState<MeditationPage> with TickerProv
   }
 
   Widget _buildActiveMeditationView() {
-    return Scaffold(
-      backgroundColor: AppColors.bgDark,
-      body: Stack(
-        children: [
-          // Background Animado Brilhante
-          Center(
-            child: AnimatedContainer(
-              duration: const Duration(seconds: 4),
-              width: 250 * _breathScale,
-              height: 250 * _breathScale,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.emotionCalm.withOpacity(0.4),
-                    AppColors.primary.withOpacity(0.15),
-                    Colors.transparent,
+    return WillPopScope(
+      onWillPop: () async {
+        final shouldPop = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Cancelar Meditação?'),
+            content: const Text('Deseja realmente cancelar a sessão de meditação?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Não')),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Sim')),
+            ],
+          ),
+        );
+        if (shouldPop == true) {
+          _abortMeditation();
+          return true;
+        }
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.bgDark,
+        body: Stack(
+          children: [
+            Center(
+              child: AnimatedContainer(
+                duration: const Duration(seconds: 4),
+                width: 250 * _breathScale,
+                height: 250 * _breathScale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppColors.emotionCalm.withOpacity(0.4),
+                      AppColors.primary.withOpacity(0.15),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Center(
+              child: AnimatedContainer(
+                duration: const Duration(seconds: 4),
+                width: 180 * _breathScale,
+                height: 180 * _breathScale,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.emotionCalm.withOpacity(0.3),
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.screenPadding),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          _meditationTitle.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            letterSpacing: 2.0,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.emotionCalm,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Respiração Consciente',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 300),
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary,
+                            shadows: [
+                              Shadow(
+                                color: AppColors.emotionCalm.withOpacity(0.5),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: Text(_breathingText),
+                        ),
+                        const SizedBox(height: 40),
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.bgCard.withOpacity(0.8),
+                            border: Border.all(color: AppColors.glassBorder),
+                          ),
+                          child: Center(
+                            child: Text(
+                              _formatDuration(_secondsLeft),
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text(
+                          'Feche os olhos e siga o ritmo visual ou sonoro.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              ),
+                              icon: const Icon(Icons.close_rounded),
+                              label: const Text('Cancelar Sessão', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: _abortMeditation,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                foregroundColor: AppColors.success,
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              ),
+                              icon: const Icon(Icons.done_all_rounded),
+                              label: const Text('Concluir (Pular)', style: TextStyle(fontWeight: FontWeight.bold)),
+                              onPressed: _completeMeditation,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
             ),
-          ),
-
-          // Outra camada de pulso
-          Center(
-            child: AnimatedContainer(
-              duration: const Duration(seconds: 4),
-              width: 180 * _breathScale,
-              height: 180 * _breathScale,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppColors.emotionCalm.withOpacity(0.3),
-                  width: 2,
-                ),
-              ),
-            ),
-          ),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.screenPadding),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Header
-                  Column(
-                    children: [
-                      Text(
-                        _meditationTitle.toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          letterSpacing: 2.0,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.emotionCalm,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Respiração Consciente',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Breathing guide (Expanding center)
-                  Column(
-                    children: [
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textPrimary,
-                          shadows: [
-                            Shadow(
-                              color: AppColors.emotionCalm.withOpacity(0.5),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: Text(_breathingText),
-                      ),
-                      const SizedBox(height: 40),
-                      // Immersive Circle Display
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.bgCard.withOpacity(0.8),
-                          border: Border.all(color: AppColors.glassBorder),
-                        ),
-                        child: Center(
-                          child: Text(
-                            _formatDuration(_secondsLeft),
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Controls
-                  Column(
-                    children: [
-                      const Text(
-                        'Feche os olhos e siga o ritmo visual ou sonoro.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.error,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            ),
-                            icon: const Icon(Icons.close_rounded),
-                            label: const Text('Cancelar Sessão', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _abortMeditation,
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          TextButton.icon(
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppColors.success,
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                            ),
-                            icon: const Icon(Icons.done_all_rounded),
-                            label: const Text('Concluir (Pular)', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _completeMeditation,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // ── Provider global do serviço de áudio ────────────────────────────────────
@@ -117,7 +118,13 @@ class AudioService {
     await _player.stop();
     await _player.setVolume(volume);
     await _player.setReleaseMode(ReleaseMode.loop);
-    await _player.play(UrlSource(url));
+    
+    if (url.startsWith('assets/')) {
+      final bytes = await rootBundle.load(url);
+      await _player.play(AssetSource(url.replaceFirst('assets/', '')));
+    } else {
+      await _player.play(UrlSource(url));
+    }
   }
 
   Future<void> pause() => _player.pause();
@@ -154,7 +161,7 @@ const relaxationTracks = [
     id: 'rain',
     name: 'Chuva Suave',
     emoji: '🌧️',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-rain-and-thunder-ambient-sounds-2390.mp3',
+    url: 'assets/audio/chuva calma.mp3',
     description: 'Som de chuva suave para acalmar a mente',
     category: 'Natureza',
   ),
@@ -162,7 +169,7 @@ const relaxationTracks = [
     id: 'ocean',
     name: 'Ondas do Mar',
     emoji: '🌊',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-relaxing-in-nature-522.mp3',
+    url: 'assets/audio/ondas do mar calmas.mp3',
     description: 'Ondas do oceano para meditação profunda',
     category: 'Natureza',
   ),
@@ -170,7 +177,7 @@ const relaxationTracks = [
     id: 'forest',
     name: 'Floresta Viva',
     emoji: '🌲',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-forest-treasures-315.mp3',
+    url: 'assets/audio/floresta viva.mp3',
     description: 'Pássaros e brisa na floresta',
     category: 'Natureza',
   ),
@@ -178,7 +185,7 @@ const relaxationTracks = [
     id: 'lofi',
     name: 'Lo-Fi Calmo',
     emoji: '🎵',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-slow-motion-1012.mp3',
+    url: 'assets/audio/lofi calmo.mp3',
     description: 'Beats Lo-Fi suaves para foco e relaxamento',
     category: 'Música',
   ),
@@ -186,7 +193,7 @@ const relaxationTracks = [
     id: 'tibetan',
     name: 'Tigelas Tibetanas',
     emoji: '🕉️',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-meditation-zen-ambiance-music-575.mp3',
+    url: 'assets/audio/tijelas tibetanas.mp3',
     description: 'Sons de tigelas tibetanas para meditação',
     category: 'Meditação',
   ),
@@ -194,7 +201,7 @@ const relaxationTracks = [
     id: 'piano',
     name: 'Piano Suave',
     emoji: '🎹',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3',
+    url: 'assets/audio/piano calmo.mp3',
     description: 'Piano melódico e tranquilo para relaxar',
     category: 'Música',
   ),
@@ -202,7 +209,7 @@ const relaxationTracks = [
     id: 'fire',
     name: 'Lareira Aconchegante',
     emoji: '🔥',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-campfire-crackles-1330.mp3',
+    url: 'assets/audio/lareira calma.mp3',
     description: 'Crepitar do fogo para noites aconchegantes',
     category: 'Ambiente',
   ),
@@ -210,7 +217,7 @@ const relaxationTracks = [
     id: 'wind',
     name: 'Vento Suave',
     emoji: '🍃',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-light-rain-ambience-2781.mp3',
+    url: 'assets/audio/vento calmo.mp3',
     description: 'Brisa suave para clareza mental',
     category: 'Natureza',
   ),
@@ -218,7 +225,7 @@ const relaxationTracks = [
     id: 'spa',
     name: 'Spa Relaxante',
     emoji: '🛁',
-    url: 'https://assets.mixkit.co/music/preview/mixkit-spa-relaxation-music-557.mp3',
+    url: 'assets/audio/musica zen.mp3',
     description: 'Música de spa para corpo e mente',
     category: 'Meditação',
   ),
