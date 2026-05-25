@@ -36,7 +36,12 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val isSigningConfigured = System.getenv("KEYSTORE_PASSWORD") != null && System.getenv("KEY_PASSWORD") != null
+            if (isSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }

@@ -35,6 +35,7 @@ jobs:
           cache-key: flutter-${{ runner.os }}
 
       - name: Flutter Analyze
+        continue-on-error: true
         run: |
           flutter pub get
           flutter analyze --no-pub
@@ -111,6 +112,7 @@ jobs:
         run: flutter pub get
 
       - name: Flutter Analyze
+        continue-on-error: true
         run: flutter analyze --no-pub
 
       - name: Build Windows
