@@ -55,21 +55,13 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
           echo "✅ Keystore decoded successfully"
 
-      - name: Build APK
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+            - name: Build APK
         run: |
-          if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ]; then
-            echo "⚠️  Using debug signing (secrets not configured)"
-            flutter build apk --release
+          if [ ! -f "android/app/keystore.jks" ]; then
+            echo "⚠️  Keystore not found. Building with debug signing..."
+            flutter build apk
           else
-            export KEYSTORE_PATH
-            export KEYSTORE_PASSWORD
-            export KEY_PASSWORD
-            export KEY_ALIAS
+            echo "✅ Keystore found. Building with release signing..."
             flutter build apk --release
           fi
 
