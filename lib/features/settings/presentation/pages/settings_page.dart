@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:go_router/go_router.dart';
 
@@ -273,12 +272,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     subtitle: 'Receba um lembrete do MindFlow imediatamente',
                     onTap: () async {
                       await NotificationService().showTestNotification();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notificação de teste enviada! 🔔'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Notificação de teste enviada! 🔔'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                     },
                   ),
                 ],
