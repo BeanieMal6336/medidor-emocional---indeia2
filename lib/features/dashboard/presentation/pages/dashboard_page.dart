@@ -11,6 +11,7 @@ import '../../../../core/widgets/xp_bar.dart';
 import '../../../../core/widgets/streak_badge.dart';
 import '../../../../app/router/app_router.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
+import '../../../gamification/providers/missions_provider.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -408,17 +409,55 @@ class _WeeklyMoodChart extends ConsumerWidget {
   }
 }
 
-// ── AI Insight Card ──────────────────────────────────────
-class _InsightCard extends StatelessWidget {
+class _InsightCard extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entriesAsync = ref.watch(moodNotifierProvider);
+    final entries = entriesAsync.value ?? [];
+    final profile = ref.watch(userProfileNotifierProvider).value;
+
+    String insightText;
+    if (entries.isEmpty) {
+      insightText = 'Comece registrando seu humor para receber insights personalizados sobre seu bem-estar emocional. 🌱';
+    } else {
+      final streak = profile?.currentStreak ?? 0;
+      final totalXp = profile?.totalXp ?? 0;
+      final now = DateTime.now();
+      final todayEntries = entries.where((e) =>
+        e.createdAt.year == now.year &&
+        e.createdAt.month == now.month &&
+        e.createdAt.day == now.day).toList();
+      final recentEntries = entries.take(7).toList();
+
+      if (streak >= 7) {
+        insightText = '🌟 Incrível! $streak dias de sequência — você está construindo um hábito real de autocuidado!';
+      } else if (streak >= 3) {
+        insightText = '🔥 $streak dias seguidos! Consistência é a base do bem-estar emocional. Continue assim!';
+      } else if (todayEntries.isEmpty) {
+        insightText = '⏰ Você ainda não registrou seu humor hoje. Que tal fazer isso agora? São só 2 minutos. 💫';
+      } else if (totalXp == 0) {
+        insightText = 'Complete sua primeira missão para ganhar XP e subir de nível na sua jornada emocional! ⚡';
+      } else if (recentEntries.length >= 3) {
+        final avgMood = recentEntries.fold(0, (s, e) => s + e.overallMood) / recentEntries.length;
+        if (avgMood >= 7) {
+          insightText = 'Seus últimos registros mostram um humor positivo! O que tem contribuído para isso? 🌟';
+        } else if (avgMood <= 4) {
+          insightText = 'Notei que você está passando por um período mais difícil. Conversar com o Mindo pode ajudar. 💜';
+        } else {
+          insightText = 'Seus registros mostram uma jornada equilibrada. Continue se observando com gentileza. 🌱';
+        }
+      } else {
+        insightText = 'Continue registrando seu humor para receber insights cada vez mais precisos! 📊';
+      }
+    }
+
     return GlassCard(
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [Color(0xFF1A2E1A), Color(0xFF1E1E35)],
       ),
-      onTap: () => context.push(AppRoutes.aiCompanion),
+      onTap: () => context.go(AppRoutes.aiCompanion),
       child: Row(
         children: [
           Container(
@@ -438,7 +477,7 @@ class _InsightCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Insight da semana ✨',
+                  'Insight do Mindo ✨',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -446,10 +485,10 @@ class _InsightCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
-                  'Você registrou mais esperança nos últimos 3 dias. Continue assim! 🌱',
-                  style: TextStyle(
-                    fontSize: 14,
+                Text(
+                  insightText,
+                  style: const TextStyle(
+                    fontSize: 13,
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),
@@ -464,10 +503,13 @@ class _InsightCard extends StatelessWidget {
   }
 }
 
-// ── Missions Preview ─────────────────────────────────────
-class _MissionsPreview extends StatelessWidget {
+// ── Missions Preview ───────────────────────────────────────
+class _MissionsPreview extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final missionsState = ref.watch(missionsProvider);
+    final daily = missionsState.daily.take(3).toList();
+
     return GlassCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,21 +539,20 @@ class _MissionsPreview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          ..._missions.map((m) => _MissionTile(mission: m)),
+          if (missionsState.isLoading)
+            const Center(child: SizedBox(height: 60, child: CircularProgressIndicator()))
+          else if (daily.isEmpty)
+            const Text('Nenhuma missão disponível', style: TextStyle(color: AppColors.textMuted))
+          else
+            ...daily.map((m) => _MissionTile(mission: m)),
         ],
       ),
     ).animate(delay: 400.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1);
   }
-
-  static const _missions = [
-    (emoji: '💧', title: 'Beber 2L de água', xp: 20, done: true),
-    (emoji: '🚶', title: 'Caminhar 15 minutos', xp: 30, done: false),
-    (emoji: '✍️', title: 'Escrever 3 pensamentos', xp: 25, done: false),
-  ];
 }
 
 class _MissionTile extends StatelessWidget {
-  final ({String emoji, String title, int xp, bool done}) mission;
+  final MissionData mission;
   const _MissionTile({required this.mission});
 
   @override
@@ -524,7 +565,7 @@ class _MissionTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: mission.done
+              color: mission.isClaimed
                   ? AppColors.accentGreen.withOpacity(0.15)
                   : AppColors.glass,
               borderRadius: BorderRadius.circular(10),
@@ -539,8 +580,8 @@ class _MissionTile extends StatelessWidget {
               mission.title,
               style: TextStyle(
                 fontSize: 14,
-                color: mission.done ? AppColors.textMuted : AppColors.textPrimary,
-                decoration: mission.done ? TextDecoration.lineThrough : null,
+                color: mission.isClaimed ? AppColors.textMuted : AppColors.textPrimary,
+                decoration: mission.isClaimed ? TextDecoration.lineThrough : null,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -562,10 +603,14 @@ class _MissionTile extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sm),
           Icon(
-            mission.done
+            mission.isClaimed
                 ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked_rounded,
-            color: mission.done ? AppColors.accentGreen : AppColors.textMuted,
+                : mission.progress >= 1.0
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.radio_button_unchecked_rounded,
+            color: mission.isClaimed || mission.progress >= 1.0
+                ? AppColors.accentGreen
+                : AppColors.textMuted,
             size: 20,
           ),
         ],

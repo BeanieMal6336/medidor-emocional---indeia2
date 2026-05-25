@@ -48,10 +48,6 @@ GoRouter appRouter(AppRouterRef ref) {
         builder: (context, state) => const MoodTrackerPage(),
       ),
       GoRoute(
-        path: AppRoutes.aiCompanion,
-        builder: (context, state) => const AiCompanionPage(),
-      ),
-      GoRoute(
         path: AppRoutes.achievements,
         builder: (context, state) => const AchievementsPage(),
       ),
@@ -69,6 +65,10 @@ GoRouter appRouter(AppRouterRef ref) {
           GoRoute(
             path: AppRoutes.missions,
             builder: (context, state) => const MissionsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.aiCompanion,
+            builder: (context, state) => const AiCompanionPage(),
           ),
           GoRoute(
             path: AppRoutes.history,

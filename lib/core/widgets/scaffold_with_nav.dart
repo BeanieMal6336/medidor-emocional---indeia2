@@ -20,22 +20,29 @@ class _ScaffoldWithNavState extends ConsumerState<ScaffoldWithNav> {
     _NavItem(icon: Icons.auto_graph_rounded, label: 'Mapa', path: '/emotional-map'),
     _NavItem(icon: Icons.add_circle_rounded, label: '', path: '/mood-tracker', isCentral: true),
     _NavItem(icon: Icons.explore_rounded, label: 'Missões', path: '/missions'),
-    _NavItem(icon: Icons.psychology_rounded, label: 'IA', path: '/ai-companion'),
+    _NavItem(icon: Icons.psychology_rounded, label: 'Mindo', path: '/ai-companion'),
   ];
 
-  int _selectedIndex = 0;
+  int get _selectedIndex => _indexForLocation(_currentLocation);
 
   String get _currentLocation {
     final router = GoRouter.of(context);
     return router.routerDelegate.currentConfiguration.fullPath;
   }
 
+  int _indexForLocation(String location) {
+    for (int i = 0; i < _navItems.length; i++) {
+      if (_navItems[i].path == location) return i;
+    }
+    return 0;
+  }
+
   void _onNavTap(int index) {
+    // Mood tracker abre como overlay (push), não substitui o shell
     if (_navItems[index].isCentral) {
       context.push(_navItems[index].path);
       return;
     }
-    setState(() => _selectedIndex = index);
     context.go(_navItems[index].path);
   }
 

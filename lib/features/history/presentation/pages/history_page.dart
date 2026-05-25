@@ -10,6 +10,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/domain/entities/emotion_entry.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
+import '../../../../app/router/app_router.dart';
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
@@ -57,6 +58,16 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
       appBar: AppBar(
         backgroundColor: AppColors.bgDark,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppRoutes.dashboard);
+            }
+          },
+        ),
         title: const Text('Histórico Emocional', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(

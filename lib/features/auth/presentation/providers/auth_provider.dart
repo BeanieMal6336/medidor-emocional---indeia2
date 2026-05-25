@@ -77,6 +77,25 @@ class AuthNotifier extends _$AuthNotifier {
     // Gerar ID local para o caso de offline
     final String localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
 
+    // Limpar dados do usuário anterior (se existia sessão offline)
+    // para garantir que novo usuário começa do zero
+    final previousId = settingsBox.get('current_offline_user_id') as String?;
+    if (previousId != null && previousId != localId) {
+      await userBox.delete(previousId); // remove perfil antigo
+      // limpa missões do usuário anterior (missions_box abre sob demanda)
+      try {
+        final missionsBox = Hive.box('missions_box');
+        final oldKeys = missionsBox.keys
+            .where((k) => k.toString().startsWith(previousId))
+            .toList();
+        for (final k in oldKeys) {
+          await missionsBox.delete(k);
+        }
+      } catch (_) {
+        // missions_box pode não estar aberto ainda — ignora
+      }
+    }
+
     // Sempre salvar credenciais localmente primeiro (banco de dados local de cadastro)
     final credentials = {
       'id': localId,
