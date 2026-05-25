@@ -343,7 +343,7 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     return days.length;
   }
 
-int _isoWeekNumber(DateTime date) {
+  int _isoWeekNumber(DateTime date) {
     final dayOfYear = date.difference(DateTime(date.year, 1, 1)).inDays;
     return ((dayOfYear - date.weekday + 10) / 7).floor();
   }
@@ -358,7 +358,6 @@ int _isoWeekNumber(DateTime date) {
     // Recarrega com estado zerado
     await _load();
   }
-}
 
   /// Chamado quando o usuário envia mensagem para o Mindo
   Future<void> onMindoMessageSent() async {
