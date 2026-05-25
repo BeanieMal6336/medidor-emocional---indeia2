@@ -1,0 +1,111 @@
+name: mindflow
+description: MindFlow — Seu companheiro emocional inteligente. Saúde mental premium, gamificada e acolhedora.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── Estado ──────────────────────────────────────────────
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+  hooks_riverpod: ^2.5.1
+  flutter_hooks: ^0.21.3+1
+
+  # ── Navegação ───────────────────────────────────────────
+  go_router: ^17.2.3
+
+  # ── Backend / Auth ───────────────────────────────────────
+  supabase_flutter: ^2.5.0
+
+  # ── Animações ────────────────────────────────────────────
+  lottie: ^3.1.2
+  rive: ^0.14.7
+  flutter_animate: ^4.5.0
+
+  # ── Gráficos ─────────────────────────────────────────────
+  fl_chart: ^1.2.0
+
+  # ── UI / Componentes ─────────────────────────────────────
+  google_fonts: ^8.1.0
+  flutter_svg: ^2.0.10+1
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  glassmorphism: ^3.0.0
+  animated_text_kit: ^4.2.2
+  smooth_page_indicator: ^2.0.1
+  percent_indicator: ^4.2.3
+  flutter_staggered_animations: ^1.1.1
+  wave: ^0.2.2
+
+  # ── Formulários / Input ───────────────────────────────────
+  flutter_form_builder: ^10.3.0+2
+  form_builder_validators: ^11.3.0
+
+  # ── Armazenamento local ───────────────────────────────────
+  shared_preferences: ^2.2.3
+  hive_flutter: ^1.1.0
+  hive: ^2.2.3
+  flutter_secure_storage: ^10.2.0
+
+  # ── Calendário ───────────────────────────────────────────
+  table_calendar: ^3.1.1
+
+  # ── Utilidades ───────────────────────────────────────────
+  intl: any
+  uuid: ^4.4.0
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.9.0
+  equatable: ^2.0.5
+  dartz: ^0.10.1
+  logger: ^2.4.0
+  connectivity_plus: ^7.1.1
+  package_info_plus: ^10.1.0
+  path_provider: ^2.1.3
+  url_launcher: ^6.3.0
+  share_plus: ^13.1.0
+
+  # ── Biometria ─────────────────────────────────────────────
+  local_auth: ^3.0.1
+
+  # ── Voz / Input ───────────────────────────────────────────
+  speech_to_text: ^7.4.0
+  flutter_tts: ^4.0.2
+
+  # ── Haptics ───────────────────────────────────────────────
+  vibration: ^3.1.8
+
+  # ── PDF ───────────────────────────────────────────────────
+  pdf: ^3.11.1
+  printing: ^5.13.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.9
+  freezed: ^2.5.2
+  json_serializable: ^6.8.0
+  riverpod_generator: ^2.4.0
+  custom_lint: ^0.6.4
+  riverpod_lint: ^2.3.10
+  hive_generator: ^2.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/animations/
+    - assets/images/
+    - assets/icons/
+    - assets/rive/
+
+    # Font assets removed; using google_fonts package for Inter typography
