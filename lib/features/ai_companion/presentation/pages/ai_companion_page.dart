@@ -38,7 +38,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   }
 
   Future<void> _initChat() async {
-    _userId = resolveCurrentUserId(ref);
+    _userId = resolveCurrentUserId();
     _chatBox = await Hive.openBox('mindo_chat_box');
     final stateRaw = _chatBox.get('state_$_userId');
     if (stateRaw != null) {
