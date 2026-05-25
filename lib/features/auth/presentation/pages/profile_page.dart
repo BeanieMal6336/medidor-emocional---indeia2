@@ -10,7 +10,7 @@ import '../../../../core/widgets/xp_bar.dart';
 import '../../../../core/widgets/streak_badge.dart';
 import '../../../../core/domain/enums/level_type.dart';
 import '../../../../app/router/app_router.dart';
-import '../../providers/missions_provider.dart';
+import '../../../gamification/providers/missions_provider.dart';
 import '../providers/auth_provider.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 

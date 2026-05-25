@@ -80,7 +80,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
   Duration _calculateDelay(String response) {
     // Entre 800ms e 2500ms baseado no tamanho
-    final baseMs = 800 + min(response.length * 3, 1700);
+    final int baseMs = 800 + min(response.length * 3, 1700).toInt();
     return Duration(milliseconds: baseMs);
   }
 
