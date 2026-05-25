@@ -18,7 +18,7 @@ class RelaxationMusicPage extends ConsumerStatefulWidget {
 class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
   String _selectedCategory = 'Todos';
 
-  final List<String> _categories = ['Todos', 'Natureza', 'Música', 'Meditação', 'Ambiente'];
+  final List<String> _categories = const ['Todos', 'Natureza', 'Música', 'Meditação', 'Ambiente'];
 
   @override
   Widget build(BuildContext context) {
@@ -385,6 +385,7 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
         side: const BorderSide(color: AppColors.glassBorder),
       ),
       onSelected: (minutes) {
+        if (!mounted) return;
         audioNotifier.setTimer(minutes);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -397,28 +398,28 @@ class _RelaxationMusicPageState extends ConsumerState<RelaxationMusicPage> {
           ),
         );
       },
-      itemBuilder: (context) => [
-        const PopupMenuItem<int?>(
+      itemBuilder: (context) => const [
+        PopupMenuItem<int?>(
           value: null,
           child: Text('Desativado', style: TextStyle(color: Colors.white70)),
         ),
-        const PopupMenuItem<int?>(
+        PopupMenuItem<int?>(
           value: 5,
           child: Text('5 minutos', style: TextStyle(color: Colors.white70)),
         ),
-        const PopupMenuItem<int?>(
+        PopupMenuItem<int?>(
           value: 15,
           child: Text('15 minutos', style: TextStyle(color: Colors.white70)),
         ),
-        const PopupMenuItem<int?>(
+        PopupMenuItem<int?>(
           value: 30,
           child: Text('30 minutos', style: TextStyle(color: Colors.white70)),
         ),
-        const PopupMenuItem<int?>(
+        PopupMenuItem<int?>(
           value: 45,
           child: Text('45 minutos', style: TextStyle(color: Colors.white70)),
         ),
-        const PopupMenuItem<int?>(
+        PopupMenuItem<int?>(
           value: 60,
           child: Text('60 minutos', style: TextStyle(color: Colors.white70)),
         ),
