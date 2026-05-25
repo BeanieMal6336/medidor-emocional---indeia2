@@ -7,6 +7,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/domain/entities/mission.dart';
 import '../../../core/domain/enums/mission_status.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
+import '../../../core/utils/user_session.dart';
 import '../../mood_tracker/providers/mood_provider.dart';
 import '../../../core/services/sensor_service.dart';
 
@@ -209,13 +210,7 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
 
   Future<void> _init() async {
     _missionsBox = await Hive.openBox('missions_box');
-    final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-    final supabaseUser = _ref.read(currentUserProvider);
-    if (supabaseUser != null) {
-      _userId = supabaseUser.id;
-    } else {
-      _userId = settingsBox.get('current_offline_user_id', defaultValue: 'local_user') as String;
-    }
+    _userId = _ref.read(activeUserIdProvider);
 
     final now = DateTime.now();
     _todayKey = '${_userId}_daily_${now.year}_${now.month}_${now.day}';

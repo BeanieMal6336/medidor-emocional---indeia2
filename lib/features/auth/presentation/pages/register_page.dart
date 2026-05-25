@@ -9,6 +9,7 @@ import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../app/router/app_router.dart';
 import '../providers/auth_provider.dart';
+import '../../../mood_tracker/providers/mood_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
   const RegisterPage({super.key});
@@ -38,12 +39,22 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         _passwordController.text.isEmpty) return;
     setState(() => _isLoading = true);
     try {
+      final name = _nameController.text.trim();
       await ref.read(authNotifierProvider.notifier).signUpWithEmail(
             _emailController.text.trim(),
             _passwordController.text,
-            _nameController.text.trim(),
+            name,
           );
-      if (mounted) context.go(AppRoutes.dashboard);
+      await ref.read(userProfileNotifierProvider.future);
+      if (!mounted) return;
+      final displayName = ref.read(userProfileNotifierProvider).value?.displayName ?? name;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bem-vindo(a), $displayName! Sua jornada começa agora.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go(AppRoutes.dashboard);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -310,48 +310,82 @@ class _MonthView extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final monthLabel = DateFormat('MMMM yyyy', 'pt_BR').format(now);
-
-    final monthEntries = entries.where((e) =>
-        e.createdAt.year == now.year && e.createdAt.month == now.month).toList();
-
-    // Compute real stats
-    double avgMood = 0;
-    if (monthEntries.isNotEmpty) {
-      avgMood = monthEntries.fold(0, (s, e) => s + e.overallMood) / monthEntries.length;
+    final title = monthLabel[0].toUpperCase() + monthLabel.substring(1);
+    final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+    final monthEntries = entries
+        .where((e) => e.createdAt.year == now.year && e.createdAt.month == now.month)
+        .toList();
+    final daysWithData = <int>{};
+    final dayMoods = <int, double>{};
+    for (final e in monthEntries) {
+      final d = e.createdAt.day;
+      daysWithData.add(d);
+      dayMoods[d] = ((dayMoods[d] ?? 0) + e.overallMood);
     }
-    final totalEntries = monthEntries.length;
-
+    for (final d in dayMoods.keys.toList()) {
+      final count = monthEntries.where((e) => e.createdAt.day == d).length;
+      if (count > 0) dayMoods[d] = dayMoods[d]! / count;
+    }
+    final avgMood = monthEntries.isEmpty
+        ? 0.0
+        : monthEntries.fold<double>(0, (s, e) => s + e.overallMood) / monthEntries.length;
+    final progress = daysWithData.length / daysInMonth;
+    if (monthEntries.isEmpty) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.screenPadding),
+        child: Column(
+          children: [
+            _MonthHeader(title: title, progress: 0, daysLogged: 0, daysInMonth: daysInMonth),
+            const SizedBox(height: AppSpacing.md),
+            GlassCard(
+              child: Column(
+                children: [
+                  const Text('📅', style: TextStyle(fontSize: 48)),
+                  const SizedBox(height: AppSpacing.md),
+                  const Text(
+                    'Seu calendário emocional está vazio',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Text(
+                    'Cada dia que você registra o humor aparece aqui com cor e emoji. '
+                    'Quanto mais dias, mais claro fica seu padrão mensal.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  const _MonthLegend(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Heatmap calendar
-          GlassCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Heatmap — ${monthLabel[0].toUpperCase()}${monthLabel.substring(1)}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                _HeatmapGrid(entries: monthEntries, month: now),
-              ],
-            ),
-          ).animate().fadeIn(duration: 500.ms),
+          _MonthHeader(
+            title: title,
+            progress: progress,
+            daysLogged: daysWithData.length,
+            daysInMonth: daysInMonth,
+          ),
           const SizedBox(height: AppSpacing.md),
-          // Stats row
           Row(
             children: [
               Expanded(
                 child: _StatCard(
                   emoji: '📈',
                   label: 'Média do mês',
-                  value: avgMood > 0 ? avgMood.toStringAsFixed(1) : '—',
+                  value: avgMood.toStringAsFixed(1),
                   color: AppColors.emotionHope,
                 ),
               ),
@@ -359,13 +393,194 @@ class _MonthView extends StatelessWidget {
               Expanded(
                 child: _StatCard(
                   emoji: '✍️',
-                  label: 'Registros',
-                  value: '$totalEntries',
+                  label: 'Dias registrados',
+                  value: '${daysWithData.length}/$daysInMonth',
                   color: AppColors.primary,
                 ),
               ),
             ],
-          ).animate(delay: 200.ms).fadeIn(duration: 500.ms),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          GlassCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Calendário do mês',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Toque mentalmente em cada dia: cores = seu humor médio naquele dia.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                _HeatmapGrid(entries: monthEntries, month: now),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Resumo por dia',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...List.generate(daysInMonth, (i) {
+            final day = i + 1;
+            final mood = dayMoods[day];
+            final date = DateTime(now.year, now.month, day);
+            final weekday = DateFormat('EEE', 'pt_BR').format(date);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _MonthDayRow(
+                day: day,
+                weekday: weekday,
+                mood: mood,
+                hasData: mood != null,
+              ),
+            );
+          }).reversed,
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthHeader extends StatelessWidget {
+  final String title;
+  final double progress;
+  final int daysLogged;
+  final int daysInMonth;
+  const _MonthHeader({
+    required this.title,
+    required this.progress,
+    required this.daysLogged,
+    required this.daysInMonth,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            daysLogged == 0
+                ? 'Nenhum registro ainda neste mês'
+                : 'Você registrou $daysLogged de $daysInMonth dias (${(progress * 100).round()}%)',
+            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress.clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: AppColors.glass,
+              color: AppColors.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthLegend extends StatelessWidget {
+  const _MonthLegend();
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 12,
+      runSpacing: 8,
+      children: const [
+        _HeatmapLegend(color: AppColors.glass, label: 'Sem registro'),
+        _HeatmapLegend(color: Color(0x996B7FD7), label: 'Difícil'),
+        _HeatmapLegend(color: Color(0x99F5A623), label: 'Ok'),
+        _HeatmapLegend(color: Color(0x994CAF50), label: 'Bem'),
+        _HeatmapLegend(color: Color(0xCC66BB6A), label: 'Ótimo'),
+      ],
+    );
+  }
+}
+
+class _MonthDayRow extends StatelessWidget {
+  final int day;
+  final String weekday;
+  final double? mood;
+  final bool hasData;
+  const _MonthDayRow({
+    required this.day,
+    required this.weekday,
+    required this.mood,
+    required this.hasData,
+  });
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: hasData ? _moodColor(mood!) : AppColors.glass,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                hasData ? _moodEmoji(mood!) : '·',
+                style: TextStyle(
+                  fontSize: hasData ? 20 : 18,
+                  color: hasData ? Colors.white : AppColors.textMuted,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dia $day',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  weekday,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            hasData ? '${mood!.toStringAsFixed(1)}/10' : 'Sem dado',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: hasData ? _moodColor(mood!) : AppColors.textMuted,
+            ),
+          ),
         ],
       ),
     );
@@ -435,10 +650,10 @@ class _HeatmapGrid extends StatelessWidget {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
+          children: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
               .map((d) => Text(d,
                   style: const TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     color: AppColors.textMuted,
                     fontWeight: FontWeight.w600,
                   )))

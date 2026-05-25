@@ -331,9 +331,9 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   Widget _buildQuickSuggestions() {
     final suggestions = [
       'Estou ansioso(a)',
-      'Me sinto triste',
       'Meditação guiada',
-      'Preciso de ajuda',
+      'Pensamento negativo',
+      'Preciso desabafar',
     ];
 
     return Container(
@@ -390,7 +390,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                     color: AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.md),
             const Text(
-              'O Mindo é um assistente emocional treinado com técnicas de:\n\n• 🧠 CBT (Terapia Cognitivo-Comportamental)\n• 🌿 ACT (Terapia de Aceitação e Compromisso)\n• 🧘 Mindfulness e Regulação Emocional\n\nEle detecta seu estado emocional, lembra do contexto da conversa e oferece técnicas personalizadas.\n\n⚠️ Mindo NÃO é um psicólogo. Se você estiver em crise ou precisar de ajuda profissional, procure um terapeuta ou ligue para o CVV: 188.',
+              'O Mindo é um motor emocional local (sem API) com:\n\n• 🧠 Memória da conversa e rapport progressivo\n• 🧘 Meditação guiada passo a passo\n• 📓 Técnicas CBT (reestruturação de pensamentos)\n• 🌿 Grounding, respiração e regulação\n• 📊 Contexto do seu perfil e jornada no app\n\n⚠️ Não substitui psicólogo/terapeuta. Crise: CVV **188**.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary,

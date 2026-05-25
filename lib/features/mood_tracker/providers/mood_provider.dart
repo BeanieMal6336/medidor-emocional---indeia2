@@ -10,6 +10,7 @@ import '../../../../core/domain/entities/emotion_entry.dart';
 import '../../../../core/domain/entities/user_profile.dart';
 import '../../../../core/domain/entities/emotion.dart';
 import '../../auth/presentation/providers/auth_provider.dart';
+import '../../../../core/utils/user_session.dart';
 
 part 'mood_provider.g.dart';
 
@@ -22,15 +23,8 @@ class UserProfileNotifier extends _$UserProfileNotifier {
   FutureOr<UserProfile> build() async {
     _userBox = await Hive.openBox(AppConstants.hiveBoxUser);
     
-    // Obter usuário logado do Supabase se houver, senão busca o usuário local ativo
+    final localKey = ref.watch(activeUserIdProvider);
     final supabaseUser = ref.watch(currentUserProvider);
-    final String localKey;
-    if (supabaseUser != null) {
-      localKey = supabaseUser.id;
-    } else {
-      final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-      localKey = settingsBox.get('current_offline_user_id', defaultValue: 'local_user') as String;
-    }
 
     final cachedData = _userBox.get(localKey);
     if (cachedData != null) {
@@ -45,12 +39,14 @@ class UserProfileNotifier extends _$UserProfileNotifier {
     // Criar perfil padrão pegando e-mail e nome inseridos no login/cadastro offline
     final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
     final offlineEmail = settingsBox.get('current_offline_user_email', defaultValue: 'offline@mindflow.app') as String;
-    final offlineName = settingsBox.get('current_offline_user_name', defaultValue: 'Viajante') as String;
+    final offlineName = settingsBox.get('current_offline_user_name', defaultValue: '') as String;
+    final resolvedName = (supabaseUser?.userMetadata?['name'] as String?) ??
+        (offlineName.isNotEmpty ? offlineName : null);
 
     final newUser = UserProfile(
       id: localKey,
       email: supabaseUser?.email ?? offlineEmail,
-      name: supabaseUser?.userMetadata?['name'] as String? ?? (supabaseUser == null ? offlineName : null),
+      name: resolvedName,
       createdAt: DateTime.now(),
     );
     await _userBox.put(localKey, jsonEncode(newUser.toJson()));
@@ -141,14 +137,7 @@ class MoodNotifier extends _$MoodNotifier {
   FutureOr<List<EmotionEntry>> build() async {
     _moodsBox = await Hive.openBox(AppConstants.hiveBoxMoods);
     
-    final supabaseUser = ref.watch(currentUserProvider);
-    final String userId;
-    if (supabaseUser != null) {
-      userId = supabaseUser.id;
-    } else {
-      final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-      userId = settingsBox.get('current_offline_user_id', defaultValue: 'local_user') as String;
-    }
+    final userId = ref.watch(activeUserIdProvider);
 
     // Carrega do Hive
     final List<EmotionEntry> localEntries = [];
@@ -170,7 +159,7 @@ class MoodNotifier extends _$MoodNotifier {
     // Ordenar por data decrescente
     localEntries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    // Se estiver logado, podemos tentar puxar do Supabase em segundo plano
+    final supabaseUser = ref.read(currentUserProvider);
     if (supabaseUser != null) {
       _syncFromSupabase(userId);
     }
@@ -210,14 +199,7 @@ class MoodNotifier extends _$MoodNotifier {
     List<String> physicalSymptoms = const [],
     List<String> socialContext = const [],
   }) async {
-    final supabaseUser = ref.read(currentUserProvider);
-    final String userId;
-    if (supabaseUser != null) {
-      userId = supabaseUser.id;
-    } else {
-      final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-      userId = settingsBox.get('current_offline_user_id', defaultValue: 'local_user') as String;
-    }
+    final userId = ref.read(activeUserIdProvider);
     final entryId = const Uuid().v4();
     final createdAt = DateTime.now();
 

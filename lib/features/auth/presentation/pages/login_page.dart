@@ -11,6 +11,7 @@ import '../../../../core/widgets/glass_card.dart';
 import '../../../../app/router/app_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../providers/auth_provider.dart';
+import '../../../mood_tracker/providers/mood_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -57,6 +58,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             _emailController.text.trim(),
             _passwordController.text,
           );
+      await ref.read(userProfileNotifierProvider.future);
       if (mounted) context.go(AppRoutes.dashboard);
     } catch (e) {
       if (mounted) {
@@ -146,6 +148,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   emailController.text.trim(),
                                   nameController.text.trim(),
                                 );
+                            await ref.read(userProfileNotifierProvider.future);
                             if (mounted) {
                               Navigator.pop(context);
                               context.go(AppRoutes.dashboard);
