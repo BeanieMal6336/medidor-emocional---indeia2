@@ -26,6 +26,8 @@ abstract class AppConstants {
   static const hiveBoxMoods = 'moods_box';
   static const hiveBoxSettings = 'settings_box';
   static const hiveBoxCache = 'cache_box';
+  static const hiveBoxMindoConversations = 'mindo_conversations_box';
+  static const hiveBoxMindoMessages = 'mindo_messages_box';
 
   // ── Chaves de preferências ───────────────────────────────
   static const prefOnboardingDone = 'onboarding_done';

@@ -4,6 +4,7 @@
 -- ── 0. RESET SCHEMAS (WARNING: Deletes existing data in these tables to perform a clean install) ──
 drop table if exists public.insights cascade;
 drop table if exists public.ai_conversations cascade;
+drop table if exists public.mindo_conversations cascade;
 drop table if exists public.user_achievements cascade;
 drop table if exists public.achievements cascade;
 drop table if exists public.user_missions cascade;
@@ -134,10 +135,39 @@ alter table public.user_achievements enable row level security;
 create policy "Users can view their own unlocked achievements" on public.user_achievements
   for select using (auth.uid() = user_id);
 
--- ── 7. AI CONVERSATIONS ─────────────────────────────────
+-- ── 7. MINDO CONVERSATIONS (SESSÕES) ───────────────────────────────────────
+-- Cada linha representa uma sessão de conversa do usuário com o Mindo.
+-- Completamente isolada por user_id.
+create table public.mindo_conversations (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  title text not null default 'Nova Conversa',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  message_count integer default 0,
+  last_message text
+);
+
+alter table public.mindo_conversations enable row level security;
+
+create policy "Users can view their own conversations" on public.mindo_conversations
+  for select using (auth.uid() = user_id);
+
+create policy "Users can insert their own conversations" on public.mindo_conversations
+  for insert with check (auth.uid() = user_id);
+
+create policy "Users can update their own conversations" on public.mindo_conversations
+  for update using (auth.uid() = user_id);
+
+create policy "Users can delete their own conversations" on public.mindo_conversations
+  for delete using (auth.uid() = user_id);
+
+-- ── 8. AI CONVERSATIONS (MENSAGENS) ─────────────────────────────────────────
+-- Cada linha é uma mensagem dentro de uma sessão (conversation_id).
 create table public.ai_conversations (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
+  conversation_id uuid references public.mindo_conversations(id) on delete cascade not null,
   content text not null,
   role text not null check (role in ('user', 'assistant', 'system')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -150,6 +180,9 @@ create policy "Users can view their own AI chat history" on public.ai_conversati
 
 create policy "Users can insert their own AI messages" on public.ai_conversations
   for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete their own AI messages" on public.ai_conversations
+  for delete using (auth.uid() = user_id);
 
 -- ── 8. INSIGHTS TABLE ───────────────────────────────────
 create table public.insights (

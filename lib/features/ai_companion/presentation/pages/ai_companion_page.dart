@@ -1,17 +1,16 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
-import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/domain/enums/level_type.dart';
 import '../../../../core/services/mindo_engine.dart';
-import '../../../../core/utils/user_session.dart';
+import '../../../../core/domain/entities/ai_message.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
+import '../../providers/mindo_chat_provider.dart';
+import 'mindo_history_page.dart';
 
 class AiCompanionPage extends ConsumerStatefulWidget {
   const AiCompanionPage({super.key});
@@ -24,67 +23,94 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _engine = MindoEngine();
-  final List<_ChatMessage> _messages = [];
   bool _isTyping = false;
   MindoConversationState _conversationState = const MindoConversationState();
-  late Box _chatBox;
-  late String _userId;
-  bool _ready = false;
+
+  // ID da conversa ativa (gerenciado pelo provider)
+  String? _conversationId;
 
   @override
   void initState() {
     super.initState();
-    _initChat();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureActiveConversation();
+    });
   }
 
-  Future<void> _initChat() async {
-    _userId = resolveCurrentUserId();
-    _chatBox = await Hive.openBox('mindo_chat_box');
-    final stateRaw = _chatBox.get('state_$_userId');
-    if (stateRaw != null) {
-      try {
-        _conversationState = MindoConversationState.fromJson(
-          Map<String, dynamic>.from(jsonDecode(stateRaw as String)),
-        );
-      } catch (_) {}
+  // ── Garante que existe uma conversa ativa ao abrir a página ─────────────
+  Future<void> _ensureActiveConversation() async {
+    final activeId = ref.read(activeConversationIdProvider);
+    if (activeId != null) {
+      setState(() => _conversationId = activeId);
+      _loadConversationState();
+      _scrollToBottom();
+      return;
     }
+
+    final conversationsState = ref.read(mindoConversationsProvider);
+    if (conversationsState is AsyncData<List<MindoConversation>>) {
+      final conversations = conversationsState.value;
+      if (conversations.isNotEmpty) {
+        final latest = conversations.first;
+        ref.read(activeConversationIdProvider.notifier).state = latest.id;
+      } else {
+        await _createNewConversation(silent: true);
+      }
+    }
+  }
+
+  // ── Cria nova conversa e envia mensagem de boas-vindas ──────────────────
+  Future<void> _createNewConversation({bool silent = false}) async {
+    final conv = await ref
+        .read(mindoConversationsProvider.notifier)
+        .createConversation();
+
+    ref.read(activeConversationIdProvider.notifier).state = conv.id;
+
+    // Mensagem de boas-vindas
     final profile = ref.read(userProfileNotifierProvider).value;
     final name = profile?.displayName ?? '';
-    final List<dynamic>? raw = _chatBox.get('messages_$_userId') as List<dynamic>?;
-    setState(() {
-      _messages.clear();
-      if (raw != null && raw.isNotEmpty) {
-        for (final m in raw) {
-          final map = Map<String, dynamic>.from(m as Map);
-          _messages.add(_ChatMessage(
-            role: map['role'] as String,
-            content: map['content'] as String,
-            time: DateTime.parse(map['time'] as String),
-          ));
-        }
-      } else {
-        _messages.add(_ChatMessage(
-          role: 'assistant',
+    await ref.read(mindoMessagesProvider(conv.id).notifier).addMessage(
           content: MindoEngine.welcomeMessage(name),
-          time: DateTime.now(),
-        ));
-      }
-      _ready = true;
-    });
+          role: MessageRole.assistant,
+        );
+  }
+
+  // ── Carrega o estado da conversa (contexto do motor Mindo) ───────────────
+  void _loadConversationState() {
+    // O estado do motor é reconstruído a partir do histórico de mensagens.
+    // Como o MindoEngine é stateless no envio, mantemos apenas o counter.
+    final messages = ref.read(mindoMessagesProvider(_conversationId!)).value ?? [];
+    final userCount = messages.where((m) => m.isUser).length;
+    _conversationState = MindoConversationState(userMessageCount: userCount);
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ── Envia mensagem ───────────────────────────────────────────────────────
+  Future<void> _sendMessage() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty || _conversationId == null) return;
+
+    _textController.clear();
+    setState(() => _isTyping = true);
+
+    // Salva mensagem do usuário
+    await ref
+        .read(mindoMessagesProvider(_conversationId!).notifier)
+        .addMessage(content: text, role: MessageRole.user);
+
     _scrollToBottom();
-  }
 
-  Future<void> _saveSession() async {
-    final list = _messages.map((m) => {
-      'role': m.role,
-      'content': m.content,
-      'time': m.time.toIso8601String(),
-    }).toList();
-    await _chatBox.put('messages_$_userId', list);
-    await _chatBox.put('state_$_userId', jsonEncode(_conversationState.toJson()));
-  }
+    // Missão diária
+    ref.read(missionsProvider.notifier).onMindoMessageSent();
 
-  MindoUserContext _userContext() {
+    // Gera resposta do Mindo
     final profile = ref.read(userProfileNotifierProvider).value;
     final moods = ref.read(moodNotifierProvider).value ?? [];
     final now = DateTime.now();
@@ -95,7 +121,8 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
     final days = profile == null
         ? 1
         : DateTime.now().difference(profile.createdAt).inDays + 1;
-    return MindoUserContext(
+
+    final userCtx = MindoUserContext(
       displayName: profile?.displayName ?? '',
       totalXp: profile?.totalXp ?? 0,
       currentStreak: profile?.currentStreak ?? 0,
@@ -105,8 +132,33 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
       loggedMoodToday: loggedToday,
       meditationSessions: 0,
     );
+
+    final reply = _engine.respond(
+      input: text,
+      state: _conversationState,
+      user: userCtx,
+    );
+
+    final delayMs = 600 + (reply.text.length * 2).clamp(0, 2200);
+    await Future.delayed(Duration(milliseconds: delayMs));
+
+    if (!mounted) return;
+
+    await ref.read(userProfileNotifierProvider.notifier).addXp(8);
+
+    setState(() {
+      _isTyping = false;
+      _conversationState = reply.state;
+    });
+
+    await ref
+        .read(mindoMessagesProvider(_conversationId!).notifier)
+        .addMessage(content: reply.text, role: MessageRole.assistant);
+
+    _scrollToBottom();
   }
 
+  // ── Confirma reset e cria nova conversa ─────────────────────────────────
   Future<void> _resetConversation() async {
     showDialog(
       context: context,
@@ -116,85 +168,50 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
           borderRadius: BorderRadius.circular(24),
           side: const BorderSide(color: AppColors.glassBorder),
         ),
-        title: const Text('Nova Conversa?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text('Nova Conversa?',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
         content: const Text(
-          'Deseja limpar todo o histórico do chat com o Mindo e começar uma nova conversa do zero?',
-          style: TextStyle(color: AppColors.textSecondary),
+          'A conversa atual será salva no histórico e você começará uma nova do zero.',
+          style: TextStyle(color: AppColors.textSecondary, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar', style: TextStyle(color: AppColors.textMuted)),
+            child: const Text('Cancelar',
+                style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
-              final name = ref.read(userProfileNotifierProvider).value?.displayName ?? '';
-              setState(() {
-                _messages.clear();
-                _messages.add(_ChatMessage(
-                  role: 'assistant',
-                  content: MindoEngine.welcomeMessage(name),
-                  time: DateTime.now(),
-                ));
-                _conversationState = const MindoConversationState();
-              });
-              await _chatBox.delete('messages_$_userId');
-              await _chatBox.delete('state_$_userId');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Histórico de conversa limpo.')),
-              );
+              await _createNewConversation();
             },
-            child: const Text('Nova Conversa', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            child: const Text('Nova Conversa',
+                style: TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty) return;
-
-    setState(() {
-      _messages.add(_ChatMessage(
-        role: 'user',
-        content: text,
-        time: DateTime.now(),
-      ));
-      _isTyping = true;
-    });
-    _textController.clear();
-    _scrollToBottom();
-    await _saveSession();
-    ref.read(missionsProvider.notifier).onMindoMessageSent();
-    final reply = _engine.respond(
-      input: text,
-      state: _conversationState,
-      user: _userContext(),
+  // ── Abre o histórico de conversas ────────────────────────────────────────
+  void _openHistory() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MindoHistoryPage(
+          onSelect: (conv) {
+            ref.read(activeConversationIdProvider.notifier).state = conv.id;
+            Navigator.of(context).pop();
+          },
+          onNewConversation: () {
+            Navigator.of(context).pop();
+            _createNewConversation();
+          },
+        ),
+      ),
     );
-    final delayMs = 600 + (reply.text.length * 2).clamp(0, 2200);
-    await Future.delayed(Duration(milliseconds: delayMs));
-    if (!mounted) return;
-    await ref.read(userProfileNotifierProvider.notifier).addXp(8);
-    setState(() {
-      _isTyping = false;
-      _conversationState = reply.state;
-      _messages.add(_ChatMessage(
-        role: 'assistant',
-        content: reply.text,
-        time: DateTime.now(),
-      ));
-    });
-    _scrollToBottom();
-    await _saveSession();
   }
 
   void _scrollToBottom() {
@@ -211,6 +228,49 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuta mudanças nas sessões de conversas para definir a conversa ativa inicial
+    ref.listen<AsyncValue<List<MindoConversation>>>(
+      mindoConversationsProvider,
+      (previous, next) {
+        next.whenOrNull(
+          data: (conversations) {
+            final activeId = ref.read(activeConversationIdProvider);
+            if (activeId == null) {
+              if (conversations.isNotEmpty) {
+                final latest = conversations.first;
+                ref.read(activeConversationIdProvider.notifier).state = latest.id;
+              } else {
+                _createNewConversation(silent: true);
+              }
+            }
+          },
+        );
+      },
+    );
+
+    // Escuta a conversa ativa para sincronizar o estado da UI local
+    ref.listen<String?>(activeConversationIdProvider, (previous, next) {
+      if (next != previous) {
+        setState(() {
+          _conversationId = next;
+          _conversationState = const MindoConversationState();
+        });
+        if (next != null) {
+          _loadConversationState();
+          _scrollToBottom();
+        }
+      }
+    });
+
+    final conversationsAsync = ref.watch(mindoConversationsProvider);
+
+    // Observa mensagens da conversa ativa
+    final messagesAsync = _conversationId != null
+        ? ref.watch(mindoMessagesProvider(_conversationId!))
+        : const AsyncValue<List<AiMessage>>.data([]);
+    final messages = messagesAsync.value ?? [];
+    final isReady = _conversationId != null && messagesAsync is! AsyncLoading;
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       appBar: AppBar(
@@ -218,7 +278,8 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         elevation: 0,
         automaticallyImplyLeading: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.textPrimary, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_rounded,
+              color: AppColors.textPrimary, size: 20),
           onPressed: () {
             if (context.mounted) Navigator.of(context).maybePop();
           },
@@ -232,7 +293,8 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                 gradient: AppColors.gradientPrimary,
                 shape: BoxShape.circle,
               ),
-              child: const Center(child: Text('🤖', style: TextStyle(fontSize: 18))),
+              child:
+                  const Center(child: Text('🤖', style: TextStyle(fontSize: 18))),
             ),
             const SizedBox(width: AppSpacing.sm),
             Column(
@@ -264,13 +326,22 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
           ],
         ),
         actions: [
+          // Botão histórico
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.textMuted),
+            icon: const Icon(Icons.history_rounded, color: AppColors.textMuted),
+            tooltip: 'Histórico',
+            onPressed: _openHistory,
+          ),
+          // Botão nova conversa
+          IconButton(
+            icon: const Icon(Icons.add_comment_outlined,
+                color: AppColors.textMuted),
             tooltip: 'Nova Conversa',
             onPressed: _resetConversation,
           ),
           IconButton(
-            icon: const Icon(Icons.info_outline_rounded, color: AppColors.textMuted),
+            icon: const Icon(Icons.info_outline_rounded,
+                color: AppColors.textMuted),
             onPressed: _showAiInfo,
           ),
         ],
@@ -302,22 +373,38 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
           ),
           // Messages
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(AppSpacing.md),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length) {
-                  return _TypingIndicator();
-                }
-                return _MessageBubble(
-                  message: _messages[index],
-                ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.08);
-              },
-            ),
+            child: _conversationId == null && conversationsAsync.isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  )
+                : messagesAsync.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                    error: (e, _) => Center(
+                      child: Text('Erro ao carregar mensagens',
+                          style: TextStyle(color: AppColors.textMuted)),
+                    ),
+                    data: (msgs) => ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      itemCount: msgs.length + (_isTyping ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == msgs.length) {
+                          return _TypingIndicator();
+                        }
+                        final msg = msgs[index];
+                        return _MessageBubble(
+                          role: msg.role,
+                          content: msg.content,
+                        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.08);
+                      },
+                    ),
+                  ),
           ),
-          // Sugestões rápidas (somente no início)
-          if (_ready && _conversationState.userMessageCount == 0) _buildQuickSuggestions(),
+          // Sugestões rápidas (somente início da conversa)
+          if (isReady && _conversationState.userMessageCount == 0 && messages.length <= 1)
+            _buildQuickSuggestions(),
           // Input
           _ChatInput(
             controller: _textController,
@@ -350,7 +437,8 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                       _sendMessage();
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppColors.bgCard,
                         borderRadius: BorderRadius.circular(20),
@@ -410,17 +498,15 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   }
 }
 
-class _ChatMessage {
-  final String role;
-  final String content;
-  final DateTime time;
-  _ChatMessage({required this.role, required this.content, required this.time});
-  bool get isUser => role == 'user';
-}
+// ── Bubble de mensagem ────────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
-  final _ChatMessage message;
-  const _MessageBubble({required this.message});
+  final MessageRole role;
+  final String content;
+
+  const _MessageBubble({required this.role, required this.content});
+
+  bool get isUser => role == MessageRole.user;
 
   @override
   Widget build(BuildContext context) {
@@ -428,10 +514,10 @@ class _MessageBubble extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Row(
         mainAxisAlignment:
-            message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!message.isUser) ...[
+          if (!isUser) ...[
             Container(
               width: 28,
               height: 28,
@@ -439,7 +525,8 @@ class _MessageBubble extends StatelessWidget {
                 gradient: AppColors.gradientPrimary,
                 shape: BoxShape.circle,
               ),
-              child: const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
+              child:
+                  const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
@@ -450,20 +537,19 @@ class _MessageBubble extends StatelessWidget {
                 vertical: 12,
               ),
               decoration: BoxDecoration(
-                gradient: message.isUser ? AppColors.gradientPrimary : null,
-                color: message.isUser ? null : AppColors.bgCard,
+                gradient: isUser ? AppColors.gradientPrimary : null,
+                color: isUser ? null : AppColors.bgCard,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(message.isUser ? 20 : 4),
-                  bottomRight: Radius.circular(message.isUser ? 4 : 20),
+                  bottomLeft: Radius.circular(isUser ? 20 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 20),
                 ),
-                border: message.isUser
-                    ? null
-                    : Border.all(color: AppColors.glassBorder),
+                border:
+                    isUser ? null : Border.all(color: AppColors.glassBorder),
               ),
               child: Text(
-                message.content,
+                content,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -477,6 +563,8 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 }
+
+// ── Indicador de digitação ────────────────────────────────────────────────────
 
 class _TypingIndicator extends StatelessWidget {
   @override
@@ -493,7 +581,8 @@ class _TypingIndicator extends StatelessWidget {
               gradient: AppColors.gradientPrimary,
               shape: BoxShape.circle,
             ),
-            child: const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
+            child:
+                const Center(child: Text('🤖', style: TextStyle(fontSize: 14))),
           ),
           const SizedBox(width: AppSpacing.sm),
           Container(
@@ -535,6 +624,8 @@ class _TypingIndicator extends StatelessWidget {
   }
 }
 
+// ── Input de texto ────────────────────────────────────────────────────────────
+
 class _ChatInput extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
@@ -556,10 +647,10 @@ class _ChatInput extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Text field
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: AppColors.bgCard,
                 borderRadius: BorderRadius.circular(24),
@@ -584,7 +675,6 @@ class _ChatInput extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
-          // Send button
           GestureDetector(
             onTap: onSend,
             child: Container(

@@ -6,6 +6,7 @@ import '../constants/app_constants.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/mood_tracker/providers/mood_provider.dart';
 import '../../features/gamification/providers/missions_provider.dart';
+import '../../features/ai_companion/providers/mindo_chat_provider.dart';
 
 /// ID do usuário ativo — reage a login, cadastro e modo offline.
 final activeUserIdProvider = Provider<String>((ref) {
@@ -29,11 +30,34 @@ String resolveCurrentUserName() {
 }
 
 Future<void> clearUserScopedData(String userId) async {
+  // Limpa chat legado (Hive antigo)
   try {
     final chatBox = await Hive.openBox('mindo_chat_box');
     await chatBox.delete('messages_$userId');
     await chatBox.delete('state_$userId');
   } catch (_) {}
+
+  // Limpa conversas do novo banco (sessões + mensagens)
+  try {
+    final conversationsBox = await Hive.openBox(AppConstants.hiveBoxMindoConversations);
+    final convKeys = conversationsBox.keys
+        .where((k) => k.toString().startsWith('conv_${userId}_'))
+        .toList();
+    for (final k in convKeys) {
+      await conversationsBox.delete(k);
+    }
+  } catch (_) {}
+  try {
+    final messagesBox = await Hive.openBox(AppConstants.hiveBoxMindoMessages);
+    final msgKeys = messagesBox.keys
+        .where((k) => k.toString().startsWith('msg_${userId}_'))
+        .toList();
+    for (final k in msgKeys) {
+      await messagesBox.delete(k);
+    }
+  } catch (_) {}
+
+  // Limpa missões
   try {
     final missionsBox = Hive.box('missions_box');
     final keys = missionsBox.keys
@@ -106,4 +130,7 @@ void invalidateUserScopedProviders(Ref ref) {
   ref.invalidate(userProfileNotifierProvider);
   ref.invalidate(moodNotifierProvider);
   ref.invalidate(missionsProvider);
+  // Invalida providers de conversas do Mindo ao trocar de usuário
+  ref.invalidate(mindoConversationsProvider);
+  ref.invalidate(activeConversationIdProvider);
 }
