@@ -32,9 +32,13 @@ class SensorService {
     _sensorBox = await Hive.openBox('sensor_box');
     _todaySteps = _sensorBox.get(_todayStepsKey, defaultValue: 0) as int;
     
-    // Inicia escuta silenciosa de passos e GPS
-    await initPedometer();
-    await updateGPSLocation();
+    // Inicia escuta silenciosa de passos e GPS (apenas em dispositivos móveis)
+    if (!kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS)) {
+      await initPedometer();
+      await updateGPSLocation();
+    }
   }
 
   String get _todayStepsKey {
@@ -137,7 +141,9 @@ class SensorService {
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5),
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('GPS timeout'),
       );
       _currentPosition = position;
       return position;
