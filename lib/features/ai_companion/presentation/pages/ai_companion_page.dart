@@ -7,6 +7,7 @@ import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/domain/enums/level_type.dart';
 import '../../../../core/services/mindo_engine.dart';
 import '../../../../core/domain/entities/ai_message.dart';
+import '../../../../core/domain/entities/mindo_conversation.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../../providers/mindo_chat_provider.dart';
