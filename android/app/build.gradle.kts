@@ -1,20 +1,16 @@
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
-
 android {
     namespace = "com.example.mindflow"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = true
     }
-
     defaultConfig {
         applicationId = "com.example.mindflow"
         minSdk = flutter.minSdkVersion
@@ -22,38 +18,39 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
-
-    signingConfigs {
-        create("release") {
-            keyAlias = System.getenv("KEY_ALIAS") ?: "mindflow_release_key"
-            keyPassword = System.getenv("KEY_PASSWORD")
-            storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD")
+    val releaseStorePassword = System.getenv("KEYSTORE_PASSWORD")
+    val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+    val releaseSigningReady = !releaseStorePassword.isNullOrBlank() &&
+        !releaseKeyPassword.isNullOrBlank() &&
+        file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks").exists()
+    if (releaseSigningReady) {
+        signingConfigs {
+            create("release") {
+                keyAlias = System.getenv("KEY_ALIAS") ?: "mindflow_release_key"
+                keyPassword = releaseKeyPassword
+                storeFile = file(System.getenv("KEYSTORE_PATH") ?: "keystore.jks")
+                storePassword = releaseStorePassword
+            }
         }
     }
-
     buildTypes {
         release {
-            val isSigningConfigured = System.getenv("KEYSTORE_PASSWORD") != null && System.getenv("KEY_PASSWORD") != null
-            if (isSigningConfigured) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseSigningReady) {
+                signingConfigs.getByName("release")
             } else {
-                signingConfig = signingConfigs.getByName("debug")
+                signingConfigs.getByName("debug")
             }
         }
     }
 }
-
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
-
 flutter {
     source = "../.."
 }
-
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

@@ -1,143 +1,85 @@
 name: Build Installers
-
 on:
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
   workflow_dispatch:
-
 env:
-  FLUTTER_VERSION: 'stable'
   JAVA_VERSION: '17'
-
 jobs:
   build-android:
     name: Build Android APK
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
-          cache-key: flutter-${{ runner.os }}
-
-      - name: Flutter Analyze
-        continue-on-error: true
-        run: |
-          flutter pub get
-          flutter analyze --no-pub
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: flutter pub get
-
-      - name: Decode Keystore
+      - name: Accept Android licenses
+        run: yes | flutter doctor --android-licenses
+      - name: Decode keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "⚠️  WARNING: KEYSTORE_BASE64 secret not set. Using debug keystore."
+            echo "KEYSTORE_BASE64 not set; APK will use debug signing."
             exit 0
           fi
           mkdir -p android/app
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
-          echo "✅ Keystore decoded successfully"
-
-            - name: Build APK
-        run: |
-          if [ ! -f "android/app/keystore.jks" ]; then
-            echo "⚠️  Keystore not found. Building with debug signing..."
-            flutter build apk
-          else
-            echo "✅ Keystore found. Building with release signing..."
-            flutter build apk --release
-          fi
-
-      - name: Upload Android APK Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
+          test -s android/app/keystore.jks
+      - name: Build APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
         with:
           name: mindflow-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
           retention-days: 30
-
-      - name: Build failed notification
-        if: failure()
-        run: |
-          echo "❌ Android APK build failed"
-          echo "Check the logs above for details"
-          exit 1
-
   build-windows:
-    name: Build Windows PC Executable
+    name: Build Windows executable
     runs-on: windows-2022
-    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          channel: ${{ env.FLUTTER_VERSION }}
+          channel: stable
           cache: true
-          cache-key: flutter-${{ runner.os }}
-
-      - name: Enable Windows Desktop
-        run: |
-          flutter config --enable-windows-desktop
-          flutter doctor -v
-
-      - name: Install Dependencies
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+      - name: Install dependencies
         run: flutter pub get
-
-      - name: Flutter Analyze
-        continue-on-error: true
-        run: flutter analyze --no-pub
-
       - name: Build Windows
         run: flutter build windows --release
-
-      - name: Create Release Directory
-        if: success()
+      - name: Package Windows build
+        shell: pwsh
         run: |
-          if (!(Test-Path "build/windows/x64/runner/Release")) {
-            throw "Build output directory not found"
+          $candidates = @(
+            'build\windows\x64\runner\Release',
+            'build\windows\runner\Release'
+          )
+          $releaseDir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $releaseDir) {
+            Get-ChildItem -Recurse build\windows -ErrorAction SilentlyContinue | Select-Object FullName
+            throw 'Windows Release output not found'
           }
-          Write-Host "✅ Build output verified"
-
-      - name: Compress Windows Build
-        if: success()
-        run: |
-          Compress-Archive -Path build\windows\x64\runner\Release\* `
-            -DestinationPath build\mindflow-windows-x64.zip `
-            -Force
-          $size = (Get-Item build\mindflow-windows-x64.zip).Length / 1MB
-          Write-Host "✅ Compressed Windows build: $($size)MB"
-
-      - name: Upload Windows Bundle Artifact
-        if: success()
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory -Force -Path build\artifacts | Out-Null
+          Compress-Archive -Path "$releaseDir\*" -DestinationPath build\artifacts\mindflow-windows-x64.zip -Force
+      - uses: actions/upload-artifact@v4
         with:
           name: mindflow-windows-x64
-          path: build/mindflow-windows-x64.zip
+          path: build/artifacts/mindflow-windows-x64.zip
+          if-no-files-found: error
           retention-days: 30
-
-      - name: Build failed notification
-        if: failure()
-        run: |
-          Write-Host "❌ Windows build failed"
-          Write-Host "Check the logs above for details"
-          exit 1
