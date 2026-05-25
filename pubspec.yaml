@@ -118,6 +118,5 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/rive/
-    - assets/audio/
 
     # Font assets removed; using google_fonts package for Inter typography
