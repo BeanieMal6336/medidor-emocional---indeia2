@@ -154,6 +154,15 @@ final _dailyTemplates = [
     'category': 'Mente',
     'isManual': true,
   },
+  {
+    'id': 'daily_meditation',
+    'emoji': '🧘',
+    'title': 'Meditar por 5 minutos',
+    'description': 'Complete uma sessão de meditação guiada no MindFlow.',
+    'xp': 40,
+    'category': 'Mindfulness',
+    'isManual': false,
+  },
 ];
 
 // Missões semanais — templates
@@ -351,6 +360,32 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     }
 
     // Missão semanal de respiração: incrementa se a mensagem inclui exercício
+    await _incrementBreathingSession();
+  }
+
+  /// Chamado quando o usuário salva um registro de humor
+  Future<void> onMoodRegistered() async {
+    var daily = List<MissionData>.from(state.daily);
+    final idx = daily.indexWhere((m) => m.id == 'daily_mood');
+    if (idx != -1 && !daily[idx].isClaimed) {
+      daily[idx] = daily[idx].copyWith(progress: 1.0, isCompleted: true);
+      state = state.copyWith(daily: daily);
+      await _saveStates(_todayKey, daily);
+    }
+    // Atualiza missão semanal de 5 dias de humor
+    await _autoUpdateProgress();
+  }
+
+  /// Chamado quando o usuário completa uma sessão de meditação
+  Future<void> onMeditationCompleted() async {
+    var daily = List<MissionData>.from(state.daily);
+    final idx = daily.indexWhere((m) => m.id == 'daily_meditation');
+    if (idx != -1 && !daily[idx].isClaimed) {
+      daily[idx] = daily[idx].copyWith(progress: 1.0, isCompleted: true);
+      state = state.copyWith(daily: daily);
+      await _saveStates(_todayKey, daily);
+    }
+    // Incrementa contador de sessões de meditação/respiração semanais
     await _incrementBreathingSession();
   }
 

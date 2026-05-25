@@ -82,6 +82,13 @@ dependencies:
   speech_to_text: ^7.4.0
   flutter_tts: ^4.0.2
 
+  # ── Áudio ────────────────────────────────────────────────
+  audioplayers: ^6.1.0
+
+  # ── Notificações Locais ───────────────────────────────────
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
   # ── Haptics ───────────────────────────────────────────────
   vibration: ^3.1.8
 
@@ -111,5 +118,6 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/rive/
+    - assets/audio/
 
     # Font assets removed; using google_fonts package for Inter typography

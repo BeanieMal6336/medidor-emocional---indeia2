@@ -36,6 +36,8 @@ class DashboardPage extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.md),
                 _InsightCard(),
                 const SizedBox(height: AppSpacing.md),
+                const _RelaxationMeditationCard(),
+                const SizedBox(height: AppSpacing.md),
                 _MissionsPreview(),
                 const SizedBox(height: AppSpacing.md),
                 _QuickActions(context),
@@ -711,5 +713,86 @@ class _QuickAction extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ── Relaxation & Meditation Card ──────────────────────────
+class _RelaxationMeditationCard extends StatelessWidget {
+  const _RelaxationMeditationCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Relaxamento e Presença 🧘✨',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Práticas de meditação e sons da natureza para acalmar a mente.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.meditation),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary.withOpacity(0.3),
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: AppColors.primaryLight, width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Text('🧘', style: TextStyle(fontSize: 16)),
+                  label: const Text(
+                    'Meditação',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => context.go(AppRoutes.relaxation),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accentGreen.withOpacity(0.2),
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: AppColors.accentGreen, width: 1),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Text('🎵', style: TextStyle(fontSize: 16)),
+                  label: const Text(
+                    'Sons de Cura',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate(delay: 450.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1);
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -19,6 +20,37 @@ class MissionsPage extends ConsumerStatefulWidget {
 }
 
 class _MissionsPageState extends ConsumerState<MissionsPage> {
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  String _getWeeklyCountdown() {
+    final now = DateTime.now();
+    int daysUntilMonday = DateTime.monday - now.weekday;
+    if (daysUntilMonday <= 0) {
+      daysUntilMonday += 7;
+    }
+    final nextMonday = DateTime(now.year, now.month, now.day + daysUntilMonday);
+    final diff = nextMonday.difference(now);
+
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final minutes = diff.inMinutes % 60;
+
+    return '${days}d ${hours}h ${minutes}m';
+  }
   void _claimXp(String id, bool isDaily) {
     ref.read(missionsProvider.notifier).claimMission(id, isDaily);
     ScaffoldMessenger.of(context).showSnackBar(
@@ -131,11 +163,11 @@ class _MissionsPageState extends ConsumerState<MissionsPage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          'Reseta toda segunda',
+                          'Reseta em: ${_getWeeklyCountdown()}',
                           style: TextStyle(
                             fontSize: 10,
                             color: AppColors.accent,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),

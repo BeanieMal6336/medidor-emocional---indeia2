@@ -20,9 +20,23 @@ class HistoryPage extends ConsumerStatefulWidget {
 }
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
-  CalendarFormat _calendarFormat = CalendarFormat.twoWeeks;
+  CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+
+  double? _getDayAverageMood(DateTime day, List<EmotionEntry> entries) {
+    final dayEntries = _getEventsForDay(day, entries);
+    if (dayEntries.isEmpty) return null;
+    final sum = dayEntries.fold<int>(0, (prev, element) => prev + element.overallMood);
+    return sum / dayEntries.length;
+  }
+
+  Color _getMoodColorForAverage(double avg) {
+    if (avg <= 3.0) return AppColors.emotionSadness.withOpacity(0.85);
+    if (avg <= 5.5) return AppColors.emotionAnxiety.withOpacity(0.85);
+    if (avg <= 8.0) return AppColors.emotionHope.withOpacity(0.85);
+    return AppColors.emotionJoy.withOpacity(0.85);
+  }
 
   @override
   void initState() {
@@ -103,20 +117,77 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                     _calendarFormat = format;
                   });
                 },
-                calendarStyle: CalendarStyle(
+                calendarBuilders: CalendarBuilders(
+                  defaultBuilder: (context, day, focusedDay) {
+                    final avg = _getDayAverageMood(day, entries);
+                    if (avg != null) {
+                      return Container(
+                        margin: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: _getMoodColorForAverage(avg),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white12, width: 1),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '${day.day}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      );
+                    }
+                    return null;
+                  },
+                  todayBuilder: (context, day, focusedDay) {
+                    final avg = _getDayAverageMood(day, entries);
+                    return Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: avg != null ? _getMoodColorForAverage(avg) : AppColors.primary.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.primary, width: 2),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${day.day}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    );
+                  },
+                  selectedBuilder: (context, day, focusedDay) {
+                    final avg = _getDayAverageMood(day, entries);
+                    return Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: avg != null ? _getMoodColorForAverage(avg) : AppColors.primary,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: AppColors.shadowPrimary,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${day.day}',
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                calendarStyle: const CalendarStyle(
                   outsideDaysVisible: false,
-                  defaultTextStyle: const TextStyle(color: AppColors.textPrimary),
-                  weekendTextStyle: const TextStyle(color: AppColors.textSecondary),
+                  defaultTextStyle: TextStyle(color: AppColors.textPrimary),
+                  weekendTextStyle: TextStyle(color: AppColors.textSecondary),
                   todayDecoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.3),
+                    color: Colors.transparent,
                     shape: BoxShape.circle,
                   ),
-                  selectedDecoration: const BoxDecoration(
-                    color: AppColors.primary,
+                  selectedDecoration: BoxDecoration(
+                    color: Colors.transparent,
                     shape: BoxShape.circle,
                   ),
-                  markerDecoration: const BoxDecoration(
-                    color: AppColors.accent,
+                  markerDecoration: BoxDecoration(
+                    color: Colors.transparent,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -131,6 +202,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          _buildMonthlySummary(entries),
           const SizedBox(height: AppSpacing.md),
 
           // Timeline/List header
@@ -182,6 +255,88 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMonthlySummary(List<EmotionEntry> entries) {
+    final monthEntries = entries.where((e) => e.createdAt.year == _focusedDay.year && e.createdAt.month == _focusedDay.month).toList();
+    if (monthEntries.isEmpty) {
+      return const SizedBox();
+    }
+
+    final double avgMood = monthEntries.fold<int>(0, (sum, e) => sum + e.overallMood) / monthEntries.length;
+    final Set<String> activeDays = monthEntries.map((e) => '${e.createdAt.day}').toSet();
+    
+    // Encontrar emoção mais frequente
+    final emotionCounts = <String, int>{};
+    for (final entry in monthEntries) {
+      for (final emo in entry.emotions) {
+        emotionCounts[emo.type.label] = (emotionCounts[emo.type.label] ?? 0) + 1;
+      }
+    }
+    String dominantEmotion = 'Nenhuma';
+    int maxCount = 0;
+    emotionCounts.forEach((key, val) {
+      if (val > maxCount) {
+        maxCount = val;
+        dominantEmotion = key;
+      }
+    });
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenPadding),
+      child: GlassCard(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            Column(
+              children: [
+                const Text('Média Mensal', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(
+                  '${avgMood.toStringAsFixed(1)}/10',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: _getMoodColorForAverage(avgMood),
+                  ),
+                ),
+              ],
+            ),
+            Container(width: 1, height: 30, color: AppColors.glassBorder),
+            Column(
+              children: [
+                const Text('Dias Ativos', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(
+                  '${activeDays.length} dias',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            Container(width: 1, height: 30, color: AppColors.glassBorder),
+            Column(
+              children: [
+                const Text('Foco Emocional', style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(
+                  dominantEmotion,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primaryLight,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

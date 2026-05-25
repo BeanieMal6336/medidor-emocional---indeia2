@@ -9,6 +9,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/glass_card.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../app/router/app_router.dart';
+import '../../../../core/services/notification_service.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -22,6 +23,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _pinCodeEnabled = false;
   bool _notificationsEnabled = true;
   bool _offlineMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
+    _notificationsEnabled = settingsBox.get('notifications_enabled', defaultValue: true) as bool;
+    _biometricEnabled = settingsBox.get('biometric_enabled', defaultValue: false) as bool;
+    _pinCodeEnabled = settingsBox.get('pincode_enabled', defaultValue: false) as bool;
+    _offlineMode = settingsBox.get('offline_mode_strict', defaultValue: false) as bool;
+  }
 
   void _showRegisteredEmails() {
     final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
@@ -191,12 +202,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _buildSwitchTile(
+                   _buildSwitchTile(
                     icon: Icons.fingerprint_rounded,
                     title: 'Autenticação Biométrica',
                     subtitle: 'Exigir digital/FaceID ao abrir o app',
                     value: _biometricEnabled,
-                    onChanged: (val) => setState(() => _biometricEnabled = val),
+                    onChanged: (val) async {
+                      setState(() => _biometricEnabled = val);
+                      await Hive.box(AppConstants.hiveBoxSettings).put('biometric_enabled', val);
+                    },
                   ),
                   const Divider(),
                   _buildSwitchTile(
@@ -204,7 +218,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     title: 'Bloqueio por Código PIN',
                     subtitle: 'Adicionar senha de 4 dígitos',
                     value: _pinCodeEnabled,
-                    onChanged: (val) => setState(() => _pinCodeEnabled = val),
+                    onChanged: (val) async {
+                      setState(() => _pinCodeEnabled = val);
+                      await Hive.box(AppConstants.hiveBoxSettings).put('pincode_enabled', val);
+                    },
                   ),
                   const Divider(),
                   _buildSwitchTile(
@@ -212,7 +229,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     title: 'Modo Offline Estrito',
                     subtitle: 'Armazenar dados estritamente local no dispositivo',
                     value: _offlineMode,
-                    onChanged: (val) => setState(() => _offlineMode = val),
+                    onChanged: (val) async {
+                      setState(() => _offlineMode = val);
+                      await Hive.box(AppConstants.hiveBoxSettings).put('offline_mode_strict', val);
+                    },
                   ),
                 ],
               ),
@@ -234,12 +254,32 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _buildSwitchTile(
+                   _buildSwitchTile(
                     icon: Icons.notifications_active_rounded,
-                    title: 'Lembrete Diário',
-                    subtitle: 'Notificar para registrar o humor do dia',
+                    title: 'Lembretes Periódicos (1h30)',
+                    subtitle: 'Mensagens de positivismo e autocuidado a cada 1h30',
                     value: _notificationsEnabled,
-                    onChanged: (val) => setState(() => _notificationsEnabled = val),
+                    onChanged: (val) async {
+                      setState(() => _notificationsEnabled = val);
+                      final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
+                      await settingsBox.put('notifications_enabled', val);
+                      await NotificationService().scheduleRepeatingReminders(enabled: val);
+                    },
+                  ),
+                  const Divider(),
+                  _buildActionTile(
+                    icon: Icons.notifications_active_outlined,
+                    title: 'Testar Notificação Agora',
+                    subtitle: 'Receba um lembrete do MindFlow imediatamente',
+                    onTap: () async {
+                      await NotificationService().showTestNotification();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Notificação de teste enviada! 🔔'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

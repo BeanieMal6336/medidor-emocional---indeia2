@@ -12,6 +12,7 @@ import '../../../../core/widgets/emotion_chip.dart';
 import '../../../../core/domain/enums/emotion_type.dart';
 import '../../../../core/domain/entities/emotion.dart';
 import '../../providers/mood_provider.dart';
+import '../../../gamification/providers/missions_provider.dart';
 
 class MoodTrackerPage extends ConsumerStatefulWidget {
   const MoodTrackerPage({super.key});
@@ -63,6 +64,9 @@ class _MoodTrackerPageState extends ConsumerState<MoodTrackerPage> {
             triggers: _selectedTriggers.toList(),
             physicalSymptoms: _selectedSymptoms.toList(),
           );
+
+      // Conectar registro com a missão de registro de humor diário e semanal
+      await ref.read(missionsProvider.notifier).onMoodRegistered();
 
       HapticFeedback.heavyImpact();
       if (mounted) {

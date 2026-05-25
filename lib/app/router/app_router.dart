@@ -18,6 +18,8 @@ import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/auth/presentation/pages/profile_page.dart';
 import '../../core/widgets/scaffold_with_nav.dart';
+import '../../features/relaxation/presentation/pages/relaxation_music_page.dart';
+import '../../features/relaxation/presentation/pages/meditation_page.dart';
 
 part 'app_router.g.dart';
 
@@ -86,6 +88,14 @@ GoRouter appRouter(AppRouterRef ref) {
             path: AppRoutes.profile,
             builder: (context, state) => const ProfilePage(),
           ),
+          GoRoute(
+            path: AppRoutes.relaxation,
+            builder: (context, state) => const RelaxationMusicPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.meditation,
+            builder: (context, state) => const MeditationPage(),
+          ),
         ],
       ),
     ],
@@ -107,4 +117,6 @@ abstract class AppRoutes {
   static const insights = '/insights';
   static const settings = '/settings';
   static const profile = '/profile';
+  static const relaxation = '/relaxation';
+  static const meditation = '/meditation';
 }

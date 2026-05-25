@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'app/app.dart';
 import 'core/constants/app_constants.dart';
+import 'core/services/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +31,13 @@ Future<void> main() async {
   await Hive.openBox(AppConstants.hiveBoxUser);
   await Hive.openBox(AppConstants.hiveBoxMoods);
   await Hive.openBox(AppConstants.hiveBoxSettings);
+
+  // Inicializar Serviço de Notificações
+  final notificationService = NotificationService();
+  await notificationService.initialize();
+  final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
+  final notificationsEnabled = settingsBox.get('notifications_enabled', defaultValue: true) as bool;
+  await notificationService.scheduleRepeatingReminders(enabled: notificationsEnabled);
 
   // Supabase
   await Supabase.initialize(

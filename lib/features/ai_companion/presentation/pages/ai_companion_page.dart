@@ -10,6 +10,7 @@ import '../../../../core/widgets/gradient_button.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../../../../core/services/sensor_service.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class AiCompanionPage extends ConsumerStatefulWidget {
   const AiCompanionPage({super.key});
@@ -34,6 +35,92 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   String? _lastUserEmotion; // memória de sessão
   String? _lastTopic; // memória de tópico
   bool _isInCrisis = false;
+  late Box _chatBox;
+
+  @override
+  void initState() {
+    super.initState();
+    _initChat();
+  }
+
+  Future<void> _initChat() async {
+    _chatBox = await Hive.openBox('mindo_chat_box');
+    _loadMessages();
+  }
+
+  void _loadMessages() {
+    final List<dynamic>? raw = _chatBox.get('messages') as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      setState(() {
+        _messages.clear();
+        for (final m in raw) {
+          final map = Map<String, dynamic>.from(m as Map);
+          _messages.add(_ChatMessage(
+            role: map['role'] as String,
+            content: map['content'] as String,
+            time: DateTime.parse(map['time'] as String),
+          ));
+        }
+        _messageCount = _messages.length;
+      });
+      _scrollToBottom();
+    }
+  }
+
+  Future<void> _saveMessages() async {
+    final list = _messages.map((m) => {
+      'role': m.role,
+      'content': m.content,
+      'time': m.time.toIso8601String(),
+    }).toList();
+    await _chatBox.put('messages', list);
+  }
+
+  Future<void> _resetConversation() async {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppColors.bgMedium,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: const BorderSide(color: AppColors.glassBorder),
+        ),
+        title: const Text('Nova Conversa?', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Deseja limpar todo o histórico do chat com o Mindo e começar uma nova conversa do zero?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.textMuted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              setState(() {
+                _messages.clear();
+                _messages.add(_ChatMessage(
+                  role: 'assistant',
+                  content: 'Oi! 💜 Eu sou o Mindo, seu companheiro emocional. Estou aqui para te ouvir, sem julgamentos.\n\nComo você está se sentindo agora?',
+                  time: DateTime.now(),
+                ));
+                _messageCount = 0;
+                _lastUserEmotion = null;
+                _lastTopic = null;
+                _isInCrisis = false;
+              });
+              await _chatBox.delete('messages');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Histórico de conversa limpo.')),
+              );
+            },
+            child: const Text('Nova Conversa', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -57,6 +144,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
     });
     _textController.clear();
     _scrollToBottom();
+    await _saveMessages();
 
     // Notifica o provider de missões que o usuário conversou com o Mindo
     ref.read(missionsProvider.notifier).onMindoMessageSent();
@@ -76,6 +164,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
       ));
     });
     _scrollToBottom();
+    await _saveMessages();
   }
 
   Duration _calculateDelay(String response) {
@@ -654,6 +743,11 @@ Vamos devagar. Tente responder apenas isso:
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.textMuted),
+            tooltip: 'Nova Conversa',
+            onPressed: _resetConversation,
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline_rounded, color: AppColors.textMuted),
             onPressed: _showAiInfo,
