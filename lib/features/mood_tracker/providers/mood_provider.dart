@@ -64,15 +64,13 @@ class UserProfileNotifier extends _$UserProfileNotifier {
     state = AsyncValue.data(updated);
     await _userBox.put(updated.id, jsonEncode(updated.toJson()));
     
-    // Tentar sincronizar com Supabase se logado e online
+    // Tentar sincronizar com Supabase se logado e online (background, sem await)
     final supabase = ref.read(supabaseClientProvider);
     final hasUser = ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        await supabase.from('profiles').upsert(updated.toJson());
-      } catch (e) {
+      supabase.from('profiles').upsert(updated.toJson()).catchError((e) {
         // Ignora erro de rede, offline-first
-      }
+      });
     }
   }
 
@@ -115,15 +113,13 @@ class UserProfileNotifier extends _$UserProfileNotifier {
     state = AsyncValue.data(updated);
     await _userBox.put(updated.id, jsonEncode(updated.toJson()));
 
-    // Sincroniza Supabase
+    // Sincroniza Supabase (background, sem await)
     final supabase = ref.read(supabaseClientProvider);
     final hasUser = ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        await supabase.from('profiles').upsert(updated.toJson());
-      } catch (e) {
+      supabase.from('profiles').upsert(updated.toJson()).catchError((e) {
         // ignora
-      }
+      });
     }
   }
 }
@@ -234,12 +230,10 @@ class MoodNotifier extends _$MoodNotifier {
 
     final supabaseUser = ref.read(currentUserProvider);
     if (supabaseUser != null) {
-      try {
-        final supabase = ref.read(supabaseClientProvider);
-        await supabase.from('mood_entries').insert(newEntry.toJson());
-      } catch (e) {
+      final supabase = ref.read(supabaseClientProvider);
+      supabase.from('mood_entries').insert(newEntry.toJson()).catchError((e) {
         // ignore offline save error
-      }
+      });
     }
   }
 
@@ -251,12 +245,10 @@ class MoodNotifier extends _$MoodNotifier {
 
     final supabaseUser = ref.read(currentUserProvider);
     if (supabaseUser != null) {
-      try {
-        final supabase = ref.read(supabaseClientProvider);
-        await supabase.from('mood_entries').delete().eq('id', id);
-      } catch (e) {
+      final supabase = ref.read(supabaseClientProvider);
+      supabase.from('mood_entries').delete().eq('id', id).catchError((e) {
         // ignore offline delete error
-      }
+      });
     }
   }
 }

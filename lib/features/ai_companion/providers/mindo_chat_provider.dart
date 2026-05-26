@@ -116,13 +116,13 @@ class MindoConversationsNotifier
     final current = state.value ?? [];
     state = AsyncValue.data([conv, ...current]);
 
-    // Salva no Supabase se online
+    // Salva no Supabase se online (background, sem await)
     final hasUser = _ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        final supabase = _ref.read(supabaseClientProvider);
-        await supabase.from('mindo_conversations').insert(conv.toJson());
-      } catch (_) {}
+      final supabase = _ref.read(supabaseClientProvider);
+      supabase.from('mindo_conversations').insert(conv.toJson()).catchError((_) {
+        // ignore offline save error
+      });
     }
 
     return conv;
@@ -143,15 +143,16 @@ class MindoConversationsNotifier
     newList.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     state = AsyncValue.data(newList);
 
-    // Sincroniza no Supabase
+    // Sincroniza no Supabase (background, sem await)
     final hasUser = _ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        final supabase = _ref.read(supabaseClientProvider);
-        await supabase
-            .from('mindo_conversations')
-            .upsert(updated.toJson());
-      } catch (_) {}
+      final supabase = _ref.read(supabaseClientProvider);
+      supabase
+          .from('mindo_conversations')
+          .upsert(updated.toJson())
+          .catchError((_) {
+        // ignore offline save error
+      });
     }
   }
 
@@ -175,20 +176,20 @@ class MindoConversationsNotifier
     state = AsyncValue.data(
         current.where((c) => c.id != conversationId).toList());
 
-    // Remove no Supabase
+    // Remove no Supabase (background, sem await)
     final hasUser = _ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        final supabase = _ref.read(supabaseClientProvider);
-        await supabase
-            .from('mindo_conversations')
-            .delete()
-            .eq('id', conversationId);
-        await supabase
-            .from('ai_conversations')
-            .delete()
-            .eq('conversation_id', conversationId);
-      } catch (_) {}
+      final supabase = _ref.read(supabaseClientProvider);
+      supabase
+          .from('mindo_conversations')
+          .delete()
+          .eq('id', conversationId)
+          .catchError((_) {});
+      supabase
+          .from('ai_conversations')
+          .delete()
+          .eq('conversation_id', conversationId)
+          .catchError((_) {});
     }
   }
 
@@ -316,20 +317,20 @@ class MindoMessagesNotifier
     // Atualiza metadados da conversa (lastMessage, count, updatedAt)
     _updateConversationMeta(content, current.length + 1);
 
-    // Salva no Supabase
+    // Salva no Supabase (background, sem await)
     final hasUser = _ref.read(currentUserProvider) != null;
     if (hasUser) {
-      try {
-        final supabase = _ref.read(supabaseClientProvider);
-        await supabase.from('ai_conversations').insert({
-          'id': id,
-          'user_id': _userId,
-          'content': content,
-          'role': role.name,
-          'created_at': now.toIso8601String(),
-          'conversation_id': conversationId,
-        });
-      } catch (_) {}
+      final supabase = _ref.read(supabaseClientProvider);
+      supabase.from('ai_conversations').insert({
+        'id': id,
+        'user_id': _userId,
+        'content': content,
+        'role': role.name,
+        'created_at': now.toIso8601String(),
+        'conversation_id': conversationId,
+      }).catchError((_) {
+        // ignore offline save error
+      });
     }
 
     return msg;
