@@ -302,6 +302,7 @@ class _DayBar extends StatelessWidget {
 }
 
 // ── Month View ────────────────────────────────────────────
+// ── Month View ────────────────────────────────────────────
 class _MonthView extends StatelessWidget {
   final List<EmotionEntry> entries;
   const _MonthView({required this.entries});
@@ -330,6 +331,7 @@ class _MonthView extends StatelessWidget {
         ? 0.0
         : monthEntries.fold<double>(0, (s, e) => s + e.overallMood) / monthEntries.length;
     final progress = daysWithData.length / daysInMonth;
+
     if (monthEntries.isEmpty) {
       return SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.screenPadding),
@@ -362,12 +364,14 @@ class _MonthView extends StatelessWidget {
                   const _MonthLegend(),
                 ],
               ),
-            ),
+            ).animate().fadeIn(duration: 400.ms),
           ],
         ),
       );
     }
+
     return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(AppSpacing.screenPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,75 +381,93 @@ class _MonthView extends StatelessWidget {
             progress: progress,
             daysLogged: daysWithData.length,
             daysInMonth: daysInMonth,
-          ),
+          ).animate().fadeIn(duration: 400.ms),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Expanded(
                 child: _StatCard(
                   emoji: '📈',
-                  label: 'Média do mês',
+                  label: 'Média do Mês',
                   value: avgMood.toStringAsFixed(1),
-                  color: AppColors.emotionHope,
+                  color: _moodColor(avgMood),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: _StatCard(
                   emoji: '✍️',
-                  label: 'Dias registrados',
-                  value: '${daysWithData.length}/$daysInMonth',
+                  label: 'Registros',
+                  value: '${daysWithData.length}/$daysInMonth d',
                   color: AppColors.primary,
                 ),
               ),
             ],
-          ),
+          ).animate(delay: 100.ms).fadeIn(duration: 450.ms),
           const SizedBox(height: AppSpacing.md),
           GlassCard(
+            borderRadius: AppSpacing.radiusXl,
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Calendário do mês',
+                  'Calendário do Mês',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
                     color: AppColors.textPrimary,
+                    letterSpacing: -0.2,
                   ),
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Toque mentalmente em cada dia: cores = seu humor médio naquele dia.',
+                  'Cores representam seu humor médio registrado em cada dia.',
                   style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.lg),
                 _HeatmapGrid(entries: monthEntries, month: now),
               ],
             ),
-          ),
+          ).animate(delay: 200.ms).fadeIn(duration: 500.ms),
+          const SizedBox(height: AppSpacing.xl),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 16,
+                margin: const EdgeInsets.only(right: AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Resumo por Dia',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ).animate(delay: 250.ms).fadeIn(duration: 350.ms),
           const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Resumo por dia',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
           ...List.generate(daysInMonth, (i) {
             final day = i + 1;
             final mood = dayMoods[day];
             final date = DateTime(now.year, now.month, day);
-            final weekday = DateFormat('EEE', 'pt_BR').format(date);
+            final weekday = DateFormat('EEEE', 'pt_BR').format(date);
+            final capitalizedWeekday = weekday[0].toUpperCase() + weekday.substring(1);
             return Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _MonthDayRow(
                 day: day,
-                weekday: weekday,
+                weekday: capitalizedWeekday,
                 mood: mood,
                 hasData: mood != null,
-              ),
+              ).animate(delay: (i * 30).ms).fadeIn(duration: 350.ms).slideY(begin: 0.05, end: 0),
             );
           }).reversed,
         ],
@@ -465,36 +487,80 @@ class _MonthHeader extends StatelessWidget {
     required this.daysLogged,
     required this.daysInMonth,
   });
+
   @override
   Widget build(BuildContext context) {
     return GlassCard(
+      borderRadius: AppSpacing.radiusXl,
+      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${(progress * 100).round()}% Concluído',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             daysLogged == 0
-                ? 'Nenhum registro ainda neste mês'
-                : 'Você registrou $daysLogged de $daysInMonth dias (${(progress * 100).round()}%)',
+                ? 'Nenhum registro emocional feito neste mês.'
+                : 'Registrado $daysLogged de $daysInMonth dias de jornada.',
             style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: AppSpacing.md),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: progress.clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: AppColors.glass,
-              color: AppColors.primary,
-            ),
+          const SizedBox(height: AppSpacing.lg),
+          // Custom glowing progress indicator
+          Stack(
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.glass,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress.clamp(0.0, 1.0),
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.gradientPrimary,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 5,
+                        spreadRadius: 1,
+                      )
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -510,12 +576,12 @@ class _MonthLegend extends StatelessWidget {
       alignment: WrapAlignment.center,
       spacing: 12,
       runSpacing: 8,
-      children: const [
-        _HeatmapLegend(color: AppColors.glass, label: 'Sem registro'),
-        _HeatmapLegend(color: Color(0x996B7FD7), label: 'Difícil'),
-        _HeatmapLegend(color: Color(0x99F5A623), label: 'Ok'),
-        _HeatmapLegend(color: Color(0x994CAF50), label: 'Bem'),
-        _HeatmapLegend(color: Color(0xCC66BB6A), label: 'Ótimo'),
+      children: [
+        _HeatmapLegend(color: AppColors.glass, label: 'Vazio'),
+        _HeatmapLegend(color: AppColors.emotionSadness.withOpacity(0.5), label: 'Difícil'),
+        _HeatmapLegend(color: AppColors.accent.withOpacity(0.5), label: 'Regular'),
+        _HeatmapLegend(color: AppColors.emotionHope.withOpacity(0.6), label: 'Bom'),
+        _HeatmapLegend(color: AppColors.emotionJoy.withOpacity(0.8), label: 'Ótimo'),
       ],
     );
   }
@@ -532,53 +598,79 @@ class _MonthDayRow extends StatelessWidget {
     required this.mood,
     required this.hasData,
   });
+
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    final color = hasData ? _moodColor(mood!) : AppColors.glassBorder;
+    final emoji = hasData ? _moodEmoji(mood!) : '·';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
+        border: Border.all(color: AppColors.glassBorder, width: 0.8),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
+          // Left accent mood line
           Container(
-            width: 44,
-            height: 44,
+            width: 5,
+            height: 60,
+            color: hasData ? color : Colors.transparent,
+          ),
+          const SizedBox(width: 14),
+          // Emoji round badge
+          Container(
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: hasData ? _moodColor(mood!) : AppColors.glass,
-              borderRadius: BorderRadius.circular(12),
+              color: hasData ? color.withOpacity(0.12) : AppColors.glass,
+              shape: BoxShape.circle,
+              border: hasData ? Border.all(color: color.withOpacity(0.3), width: 1.5) : null,
             ),
             child: Center(
               child: Text(
-                hasData ? _moodEmoji(mood!) : '·',
+                emoji,
                 style: TextStyle(
-                  fontSize: hasData ? 20 : 18,
-                  color: hasData ? Colors.white : AppColors.textMuted,
+                  fontSize: hasData ? 18 : 16,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
+          // Day and Weekday details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   'Dia $day',
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
+                    fontSize: 14,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   weekday,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
           ),
-          Text(
-            hasData ? '${mood!.toStringAsFixed(1)}/10' : 'Sem dado',
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: hasData ? _moodColor(mood!) : AppColors.textMuted,
+          // Mood Score
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Text(
+              hasData ? '${mood!.toStringAsFixed(1)} / 10' : 'Sem dado',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: hasData ? color : AppColors.textMuted,
+              ),
             ),
           ),
         ],
@@ -601,10 +693,10 @@ class _HeatmapGrid extends StatelessWidget {
 
     Color moodColor(double? mood) {
       if (mood == null) return AppColors.glass;
-      if (mood <= 3) return AppColors.emotionSadness.withOpacity(0.6);
+      if (mood <= 3) return AppColors.emotionSadness.withOpacity(0.55);
       if (mood <= 5) return AppColors.accent.withOpacity(0.5);
-      if (mood <= 7) return AppColors.emotionHope.withOpacity(0.6);
-      return AppColors.emotionJoy.withOpacity(0.8);
+      if (mood <= 7) return AppColors.emotionHope.withOpacity(0.55);
+      return AppColors.emotionJoy.withOpacity(0.75);
     }
 
     // Build per-day averages
@@ -629,17 +721,30 @@ class _HeatmapGrid extends StatelessWidget {
       cells.add(const SizedBox());
     }
     for (int d = 1; d <= daysInMonth; d++) {
+      final hasMood = dayMoods[d] != null;
+      final mColor = moodColor(dayMoods[d]);
       cells.add(Container(
         decoration: BoxDecoration(
-          color: moodColor(dayMoods[d]),
-          borderRadius: BorderRadius.circular(4),
+          color: mColor,
+          borderRadius: BorderRadius.circular(6),
+          border: hasMood ? Border.all(color: mColor.withOpacity(0.8), width: 1) : null,
+          boxShadow: hasMood
+              ? [
+                  BoxShadow(
+                    color: mColor.withOpacity(0.25),
+                    blurRadius: 4,
+                    spreadRadius: 0.5,
+                  )
+                ]
+              : null,
         ),
         child: Center(
           child: Text(
             '$d',
             style: TextStyle(
-              fontSize: 9,
-              color: dayMoods[d] != null ? Colors.white70 : AppColors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: hasMood ? Colors.white : AppColors.textMuted,
             ),
           ),
         ),
@@ -650,33 +755,33 @@ class _HeatmapGrid extends StatelessWidget {
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+          children: const ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
               .map((d) => Text(d,
-                  style: const TextStyle(
-                    fontSize: 9,
+                  style: TextStyle(
+                    fontSize: 10,
                     color: AppColors.textMuted,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   )))
               .toList(),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 7,
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
+          mainAxisSpacing: 5,
+          crossAxisSpacing: 5,
           children: cells,
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.lg),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _HeatmapLegend(color: AppColors.glass, label: 'Vazio'),
-            _HeatmapLegend(color: AppColors.emotionSadness.withOpacity(0.6), label: 'Baixo'),
-            _HeatmapLegend(color: AppColors.accent.withOpacity(0.5), label: 'Ok'),
-            _HeatmapLegend(color: AppColors.emotionHope.withOpacity(0.6), label: 'Bem'),
-            _HeatmapLegend(color: AppColors.emotionJoy.withOpacity(0.8), label: 'Ótimo'),
+            _HeatmapLegend(color: AppColors.emotionSadness.withOpacity(0.55), label: 'Baixo'),
+            _HeatmapLegend(color: AppColors.accent.withOpacity(0.5), label: 'Regular'),
+            _HeatmapLegend(color: AppColors.emotionHope.withOpacity(0.55), label: 'Bom'),
+            _HeatmapLegend(color: AppColors.emotionJoy.withOpacity(0.75), label: 'Ótimo'),
           ],
         ),
       ],
@@ -699,10 +804,10 @@ class _HeatmapLegend extends StatelessWidget {
           Container(
             width: 10,
             height: 10,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
           ),
-          const SizedBox(width: 3),
-          Text(label, style: const TextStyle(fontSize: 9, color: AppColors.textMuted)),
+          const SizedBox(width: 4),
+          Text(label, style: const TextStyle(fontSize: 9, color: AppColors.textMuted, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -724,25 +829,51 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bgCard.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        border: Border.all(color: AppColors.glassBorder, width: 0.8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 24)),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
+          Container(
+            width: 4,
+            height: 70,
+            color: color,
           ),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textMuted,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 18)),
+                      Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: color,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
