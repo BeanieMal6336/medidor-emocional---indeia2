@@ -79,11 +79,40 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
   // ── Carrega o estado da conversa (contexto do motor Mindo) ───────────────
   void _loadConversationState() {
-    // O estado do motor é reconstruído a partir do histórico de mensagens.
-    // Como o MindoEngine é stateless no envio, mantemos apenas o counter.
-    final messages = ref.read(mindoMessagesProvider(_conversationId!)).value ?? [];
+    final messages =
+        ref.read(mindoMessagesProvider(_conversationId!)).value ?? [];
+
+    // Conta mensagens do usuário
     final userCount = messages.where((m) => m.isUser).length;
-    _conversationState = MindoConversationState(userMessageCount: userCount);
+
+    // Reconstrói histórico recente das mensagens do usuário (últimas 6)
+    final userMessages = messages
+        .where((m) => m.isUser)
+        .map((m) => m.content.toLowerCase().trim())
+        .toList();
+    final recentHistory = userMessages.length > 6
+        ? userMessages.sublist(userMessages.length - 6)
+        : userMessages;
+
+    // Detecta rapport com base no total de trocas
+    final rapportLevel = (userCount * 2).clamp(0, 10);
+
+    // Mantém o estado atual se já foi carregado para esta conversa
+    // (evita reset ao reconstruir o widget)
+    if (_conversationState.userMessageCount == userCount &&
+        _conversationId != null) {
+      return;
+    }
+
+    _conversationState = MindoConversationState(
+      userMessageCount: userCount,
+      rapportLevel: rapportLevel,
+      recentUserMessages: recentHistory,
+      // awaitingFreeResponse: true indica que o Mindo fez uma pergunta
+      // na última mensagem dele — ativamos se a última msg for do assistant
+      awaitingFreeResponse:
+          messages.isNotEmpty && !messages.last.isUser,
+    );
   }
 
   @override
@@ -96,68 +125,76 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   // ── Envia mensagem ───────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _conversationId == null) return;
+    // Bloqueia envio duplo ou enquanto o Mindo está respondendo
+    if (text.isEmpty || _conversationId == null || _isTyping) return;
 
     _textController.clear();
     setState(() => _isTyping = true);
 
-    // Salva mensagem do usuário
-    await ref
-        .read(mindoMessagesProvider(_conversationId!).notifier)
-        .addMessage(content: text, role: MessageRole.user);
+    try {
+      // Salva mensagem do usuário
+      await ref
+          .read(mindoMessagesProvider(_conversationId!).notifier)
+          .addMessage(content: text, role: MessageRole.user);
 
-    _scrollToBottom();
+      _scrollToBottom();
 
-    // Missão diária
-    ref.read(missionsProvider.notifier).onMindoMessageSent();
+      // Missão diária
+      ref.read(missionsProvider.notifier).onMindoMessageSent();
 
-    // Gera resposta do Mindo
-    final profile = ref.read(userProfileNotifierProvider).value;
-    final moods = ref.read(moodNotifierProvider).value ?? [];
-    final now = DateTime.now();
-    final loggedToday = moods.any((e) =>
-        e.createdAt.year == now.year &&
-        e.createdAt.month == now.month &&
-        e.createdAt.day == now.day);
-    final days = profile == null
-        ? 1
-        : DateTime.now().difference(profile.createdAt).inDays + 1;
+      // Gera resposta do Mindo
+      final profile = ref.read(userProfileNotifierProvider).value;
+      final moods = ref.read(moodNotifierProvider).value ?? [];
+      final now = DateTime.now();
+      final loggedToday = moods.any((e) =>
+          e.createdAt.year == now.year &&
+          e.createdAt.month == now.month &&
+          e.createdAt.day == now.day);
+      final days = profile == null
+          ? 1
+          : DateTime.now().difference(profile.createdAt).inDays + 1;
 
-    final userCtx = MindoUserContext(
-      displayName: profile?.displayName ?? '',
-      totalXp: profile?.totalXp ?? 0,
-      currentStreak: profile?.currentStreak ?? 0,
-      level: profile?.level ?? LevelType.seedling,
-      daysOnJourney: days,
-      moodEntriesCount: moods.length,
-      loggedMoodToday: loggedToday,
-      meditationSessions: 0,
-    );
+      final userCtx = MindoUserContext(
+        displayName: profile?.displayName ?? '',
+        totalXp: profile?.totalXp ?? 0,
+        currentStreak: profile?.currentStreak ?? 0,
+        level: profile?.level ?? LevelType.seedling,
+        daysOnJourney: days,
+        moodEntriesCount: moods.length,
+        loggedMoodToday: loggedToday,
+        meditationSessions: 0,
+      );
 
-    final reply = _engine.respond(
-      input: text,
-      state: _conversationState,
-      user: userCtx,
-    );
+      final reply = _engine.respond(
+        input: text,
+        state: _conversationState,
+        user: userCtx,
+      );
 
-    final delayMs = 600 + (reply.text.length * 2).clamp(0, 2200);
-    await Future.delayed(Duration(milliseconds: delayMs));
+      // Delay proporcional ao tamanho da resposta (simula digitação)
+      final delayMs = 600 + (reply.text.length * 2).clamp(0, 2000);
+      await Future.delayed(Duration(milliseconds: delayMs));
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    await ref.read(userProfileNotifierProvider.notifier).addXp(8);
+      await ref.read(userProfileNotifierProvider.notifier).addXp(8);
 
-    setState(() {
-      _isTyping = false;
-      _conversationState = reply.state;
-    });
+      setState(() {
+        _isTyping = false;
+        _conversationState = reply.state;
+      });
 
-    await ref
-        .read(mindoMessagesProvider(_conversationId!).notifier)
-        .addMessage(content: reply.text, role: MessageRole.assistant);
+      await ref
+          .read(mindoMessagesProvider(_conversationId!).notifier)
+          .addMessage(content: reply.text, role: MessageRole.assistant);
 
-    _scrollToBottom();
+      _scrollToBottom();
+    } catch (_) {
+      // Garante que o estado de digitação sempre volta ao normal
+      if (mounted) setState(() => _isTyping = false);
+    }
   }
+
 
   // ── Confirma reset e cria nova conversa ─────────────────────────────────
   Future<void> _resetConversation() async {
@@ -254,11 +291,19 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
       if (next != previous) {
         setState(() {
           _conversationId = next;
+          // Reseta apenas o estado de digitação — o resto é reconstruído
+          // pelo _loadConversationState após as mensagens carregarem
           _conversationState = const MindoConversationState();
+          _isTyping = false;
         });
         if (next != null) {
-          _loadConversationState();
-          _scrollToBottom();
+          // Aguarda um frame para as mensagens do provider serem lidas
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _loadConversationState();
+              _scrollToBottom();
+            }
+          });
         }
       }
     });

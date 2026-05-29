@@ -1,5 +1,9 @@
 import '../domain/enums/level_type.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Contexto do usuário
+// ─────────────────────────────────────────────────────────────────────────────
+
 class MindoUserContext {
   final String displayName;
   final int totalXp;
@@ -9,6 +13,7 @@ class MindoUserContext {
   final int moodEntriesCount;
   final bool loggedMoodToday;
   final int meditationSessions;
+
   const MindoUserContext({
     required this.displayName,
     required this.totalXp,
@@ -19,6 +24,33 @@ class MindoUserContext {
     required this.loggedMoodToday,
     required this.meditationSessions,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estado da conversa
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum _Topic {
+  none,
+  greeting,
+  anxiety,
+  sadness,
+  anger,
+  loneliness,
+  stress,
+  fear,
+  sleep,
+  positive,
+  relationship,
+  family,
+  work,
+  breathing,
+  meditation,
+  cbtReframe,
+  crisis,
+  gratitude,
+  confusion,
+  open,
 }
 
 class MindoConversationState {
@@ -32,6 +64,9 @@ class MindoConversationState {
   final int genericResponseIndex;
   final int rapportLevel;
   final List<String> recentUserMessages;
+  // Controla se o Mindo já fez uma pergunta aberta e aguarda resposta livre
+  final bool awaitingFreeResponse;
+
   const MindoConversationState({
     this.userMessageCount = 0,
     this.lastTopic,
@@ -43,7 +78,9 @@ class MindoConversationState {
     this.genericResponseIndex = 0,
     this.rapportLevel = 0,
     this.recentUserMessages = const [],
+    this.awaitingFreeResponse = false,
   });
+
   MindoConversationState copyWith({
     int? userMessageCount,
     String? lastTopic,
@@ -55,6 +92,7 @@ class MindoConversationState {
     int? genericResponseIndex,
     int? rapportLevel,
     List<String>? recentUserMessages,
+    bool? awaitingFreeResponse,
     bool clearTopic = false,
     bool clearEmotion = false,
     bool endGuided = false,
@@ -65,12 +103,16 @@ class MindoConversationState {
         lastEmotion: clearEmotion ? null : lastEmotion ?? this.lastEmotion,
         lastUserSnippet: lastUserSnippet ?? this.lastUserSnippet,
         inCrisis: inCrisis ?? this.inCrisis,
-        guidedMeditationActive: endGuided ? false : guidedMeditationActive ?? this.guidedMeditationActive,
-        guidedMeditationStep: endGuided ? 0 : guidedMeditationStep ?? this.guidedMeditationStep,
+        guidedMeditationActive:
+            endGuided ? false : guidedMeditationActive ?? this.guidedMeditationActive,
+        guidedMeditationStep:
+            endGuided ? 0 : guidedMeditationStep ?? this.guidedMeditationStep,
         genericResponseIndex: genericResponseIndex ?? this.genericResponseIndex,
         rapportLevel: rapportLevel ?? this.rapportLevel,
         recentUserMessages: recentUserMessages ?? this.recentUserMessages,
+        awaitingFreeResponse: awaitingFreeResponse ?? this.awaitingFreeResponse,
       );
+
   Map<String, dynamic> toJson() => {
         'userMessageCount': userMessageCount,
         'lastTopic': lastTopic,
@@ -82,7 +124,9 @@ class MindoConversationState {
         'genericResponseIndex': genericResponseIndex,
         'rapportLevel': rapportLevel,
         'recentUserMessages': recentUserMessages,
+        'awaitingFreeResponse': awaitingFreeResponse,
       };
+
   factory MindoConversationState.fromJson(Map<String, dynamic> json) =>
       MindoConversationState(
         userMessageCount: json['userMessageCount'] as int? ?? 0,
@@ -98,8 +142,13 @@ class MindoConversationState {
                 ?.map((e) => e.toString())
                 .toList() ??
             const [],
+        awaitingFreeResponse: json['awaitingFreeResponse'] as bool? ?? false,
       );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Resposta do Mindo
+// ─────────────────────────────────────────────────────────────────────────────
 
 class MindoReply {
   final String text;
@@ -107,289 +156,518 @@ class MindoReply {
   const MindoReply({required this.text, required this.state});
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Motor principal — lógica reescrita
+// ─────────────────────────────────────────────────────────────────────────────
+
 class MindoEngine {
   MindoReply respond({
     required String input,
     required MindoConversationState state,
     required MindoUserContext user,
   }) {
-    final lower = input.toLowerCase().trim();
-    final history = [...state.recentUserMessages, lower].take(5).toList();
+    final raw = input.trim();
+    if (raw.isEmpty) {
+      return MindoReply(
+        text: 'Pode continuar — estou aqui. 💜',
+        state: state,
+      );
+    }
+
+    final lower = raw.toLowerCase();
+
+    // Histórico: mantém só as 6 últimas
+    final history = [...state.recentUserMessages, lower];
+    if (history.length > 6) history.removeAt(0);
+
     var next = state.copyWith(
       userMessageCount: state.userMessageCount + 1,
-      lastUserSnippet: lower.length > 80 ? '${lower.substring(0, 80)}...' : lower,
+      lastUserSnippet: lower.length > 100 ? '${lower.substring(0, 100)}...' : lower,
       recentUserMessages: history,
-      rapportLevel: state.rapportLevel + 1,
+      rapportLevel: (state.rapportLevel + 1).clamp(0, 10),
     );
+
+    // ── 1. CRISE — prioridade máxima ─────────────────────────────────────
+    if (_hasCrisis(lower)) {
+      return MindoReply(
+        text: _crisisResponse(user),
+        state: next.copyWith(inCrisis: true, lastTopic: 'crise', awaitingFreeResponse: true),
+      );
+    }
+
+    // ── 2. MEDITAÇÃO GUIADA EM ANDAMENTO ─────────────────────────────────
     if (next.guidedMeditationActive) {
-      final guided = _guidedMeditationStep(lower, next, user);
-      return MindoReply(text: guided.text, state: guided.state);
+      return _advanceMeditation(lower, next, user);
     }
-    if (_wantsGuidedMeditation(lower)) {
-      next = next.copyWith(guidedMeditationActive: true, guidedMeditationStep: 0);
-      return MindoReply(text: _guidedIntro(user), state: next);
-    }
-    if (_containsAny(lower, [
-      'suicid', 'me matar', 'quero morrer', 'nao quero mais viver',
-      'não quero mais viver', 'acabar com tudo', 'me machucar',
-      'automutilação', 'cortar', 'desaparecer para sempre',
-    ])) {
-      return MindoReply(
-        text: '''💜 Obrigado por confiar em mim. O que você sente é real e pesado — você não está sozinho(a).
 
-**CVV — 188** (24h) · **cvv.org.br**
+    // ── 3. Detecta intenção primária com peso (mais específica vence) ─────
+    final intent = _detectPrimaryIntent(lower);
 
-Estou aqui. O que está acontecendo neste momento?''',
-        state: next.copyWith(inCrisis: true, lastTopic: 'crise'),
-      );
+    // ── 4. Usuário respondendo à pergunta aberta anterior do Mindo ────────
+    //    Só trata como "continuação" se NÃO identificamos uma intenção nova forte
+    if (next.awaitingFreeResponse && intent == _Topic.none && next.lastTopic != null) {
+      return _handleFreeResponse(lower, next, user);
     }
-    if (next.inCrisis && !_isCrisisContinuation(lower)) {
-      next = next.copyWith(inCrisis: false);
-    }
-    if (_wantsThoughtReframe(lower)) {
-      return MindoReply(
-        text: _cbtReframe(user),
-        state: next.copyWith(lastTopic: 'reframe', lastEmotion: 'ansiedade'),
-      );
-    }
-    if (_isFollowUp(lower) && next.lastTopic != null) {
-      return MindoReply(
-        text: _deepFollowUp(next, user, lower),
-        state: next,
-      );
-    }
-    if (_isExplicitGreeting(lower) && next.userMessageCount <= 2) {
-      return MindoReply(text: _greeting(user), state: next.copyWith(lastTopic: 'saudacao'));
-    }
-    final tone = _detectTone(lower);
-    if (tone != null && next.rapportLevel >= 2 && lower.length > 40) {
-      return MindoReply(
-        text: _reflectiveInsight(lower, tone, user, next),
-        state: next.copyWith(lastTopic: 'reflexão', lastEmotion: tone),
-      );
-    }
-    if (_containsAny(lower, [
-      'ansiedad', 'ansioso', 'ansiosa', 'angustia', 'angústia',
-      'nervoso', 'nervosa', 'preocupado', 'preocupada', 'apavorad', 'panico', 'pânico',
-    ])) {
-      return MindoReply(
-        text: _anxiety(lower, user),
-        state: next.copyWith(lastTopic: 'ansiedade', lastEmotion: 'ansiedade'),
-      );
-    }
-    if (_containsAny(lower, [
-      'triste', 'tristeza', 'choran', 'chorei', 'deprimid', 'depressão', 'depressao',
-      'vazio', 'sem esperança', 'sem esperanca', 'desmotivad',
-    ])) {
-      return MindoReply(
-        text: _sadness(lower, user),
-        state: next.copyWith(lastTopic: 'tristeza', lastEmotion: 'tristeza'),
-      );
-    }
-    if (_containsAny(lower, ['raiva', 'irritad', 'bravo', 'brava', 'frustrad', 'ódio', 'odio'])) {
-      return MindoReply(
-        text: _anger(user),
-        state: next.copyWith(lastTopic: 'raiva', lastEmotion: 'raiva'),
-      );
-    }
-    if (_containsAny(lower, ['sozinho', 'sozinha', 'solidão', 'solidao', 'isolad', 'abandonad'])) {
-      return MindoReply(
-        text: _loneliness(user),
-        state: next.copyWith(lastTopic: 'solidão', lastEmotion: 'solidão'),
-      );
-    }
-    if (_containsAny(lower, ['estressad', 'estresse', 'sobrecarregad', 'burnout', 'esgotad'])) {
-      return MindoReply(
-        text: _stress(user),
-        state: next.copyWith(lastTopic: 'estresse', lastEmotion: 'estresse'),
-      );
-    }
-    if (_containsAny(lower, ['medo', 'assustado', 'assustada', 'pavor', 'fobia'])) {
-      return MindoReply(
-        text: _fear(user),
-        state: next.copyWith(lastTopic: 'medo', lastEmotion: 'medo'),
-      );
-    }
-    if (_containsAny(lower, ['sono', 'dormir', 'insônia', 'insonia', 'cansad', 'exaust'])) {
-      return MindoReply(
-        text: _sleepSupport(user),
-        state: next.copyWith(lastTopic: 'sono'),
-      );
-    }
-    if (_isPositive(lower)) {
-      return MindoReply(
-        text: _positive(user),
-        state: next.copyWith(lastTopic: 'positivo', lastEmotion: 'positivo'),
-      );
-    }
-    if (_containsAny(lower, ['relacionamento', 'namorad', 'parceir', 'termino', 'término'])) {
-      return MindoReply(text: _relationship(user), state: next.copyWith(lastTopic: 'relacionamento'));
-    }
-    if (_containsAny(lower, ['família', 'familia', 'mãe', 'mae', 'pai', 'irmão', 'irma'])) {
-      return MindoReply(text: _family(user), state: next.copyWith(lastTopic: 'família'));
-    }
-    if (_containsAny(lower, ['trabalho', 'emprego', 'faculdade', 'escola', 'chefe', 'prova'])) {
-      return MindoReply(text: _work(user), state: next.copyWith(lastTopic: 'trabalho'));
-    }
-    if (_containsAny(lower, [
-      'respiração', 'respiracao', 'respirar', 'meditação', 'meditacao',
-      'relaxar', 'acalmar', 'técnica', 'tecnica', 'exercicio',
-    ])) {
-      if (_wantsGuidedMeditation(lower)) {
-        next = next.copyWith(guidedMeditationActive: true, guidedMeditationStep: 0);
+
+    // ── 5. Intenções específicas ──────────────────────────────────────────
+    switch (intent) {
+      case _Topic.greeting:
+        return MindoReply(
+          text: _greeting(user),
+          state: next.copyWith(lastTopic: 'saudacao', awaitingFreeResponse: true),
+        );
+
+      case _Topic.meditation:
+        next = next.copyWith(guidedMeditationActive: true, guidedMeditationStep: 0, lastTopic: 'meditação');
         return MindoReply(text: _guidedIntro(user), state: next);
-      }
-      return MindoReply(text: _breathing(), state: next.copyWith(lastTopic: 'respiração'));
+
+      case _Topic.breathing:
+        return MindoReply(
+          text: _breathingTechnique(),
+          state: next.copyWith(lastTopic: 'respiração', awaitingFreeResponse: false),
+        );
+
+      case _Topic.cbtReframe:
+        return MindoReply(
+          text: _cbtReframe(user),
+          state: next.copyWith(lastTopic: 'reframe', lastEmotion: 'pensamento negativo', awaitingFreeResponse: true),
+        );
+
+      case _Topic.anxiety:
+        return MindoReply(
+          text: _anxiety(lower, user),
+          state: next.copyWith(lastTopic: 'ansiedade', lastEmotion: 'ansiedade', awaitingFreeResponse: true),
+        );
+
+      case _Topic.sadness:
+        return MindoReply(
+          text: _sadness(lower, user),
+          state: next.copyWith(lastTopic: 'tristeza', lastEmotion: 'tristeza', awaitingFreeResponse: true),
+        );
+
+      case _Topic.anger:
+        return MindoReply(
+          text: _anger(user),
+          state: next.copyWith(lastTopic: 'raiva', lastEmotion: 'raiva', awaitingFreeResponse: true),
+        );
+
+      case _Topic.loneliness:
+        return MindoReply(
+          text: _loneliness(user),
+          state: next.copyWith(lastTopic: 'solidão', lastEmotion: 'solidão', awaitingFreeResponse: true),
+        );
+
+      case _Topic.stress:
+        return MindoReply(
+          text: _stress(user),
+          state: next.copyWith(lastTopic: 'estresse', lastEmotion: 'estresse', awaitingFreeResponse: true),
+        );
+
+      case _Topic.fear:
+        return MindoReply(
+          text: _fear(lower, user),
+          state: next.copyWith(lastTopic: 'medo', lastEmotion: 'medo', awaitingFreeResponse: true),
+        );
+
+      case _Topic.sleep:
+        return MindoReply(
+          text: _sleepSupport(user),
+          state: next.copyWith(lastTopic: 'sono', awaitingFreeResponse: true),
+        );
+
+      case _Topic.positive:
+        return MindoReply(
+          text: _positive(user),
+          state: next.copyWith(lastTopic: 'positivo', lastEmotion: 'positivo', awaitingFreeResponse: true),
+        );
+
+      case _Topic.relationship:
+        return MindoReply(
+          text: _relationship(user),
+          state: next.copyWith(lastTopic: 'relacionamento', awaitingFreeResponse: true),
+        );
+
+      case _Topic.family:
+        return MindoReply(
+          text: _family(user),
+          state: next.copyWith(lastTopic: 'família', awaitingFreeResponse: true),
+        );
+
+      case _Topic.work:
+        return MindoReply(
+          text: _work(user),
+          state: next.copyWith(lastTopic: 'trabalho', awaitingFreeResponse: true),
+        );
+
+      case _Topic.gratitude:
+        return MindoReply(
+          text: _gratitude(user),
+          state: next.copyWith(lastTopic: 'gratidao', awaitingFreeResponse: true),
+        );
+
+      case _Topic.confusion:
+        return MindoReply(
+          text: _confusion(),
+          state: next.copyWith(lastTopic: 'confusão', awaitingFreeResponse: true),
+        );
+
+      // Sem intenção clara
+      case _Topic.none:
+      case _Topic.crisis:
+      case _Topic.open:
+        break;
     }
-    if (_containsAny(lower, ['obrigado', 'obrigada', 'valeu', 'ajudou', 'grato', 'grata'])) {
-      return MindoReply(text: _gratitude(user), state: next);
-    }
-    if (_containsAny(lower, ['não sei', 'nao sei', 'confuso', 'confusa', 'perdido', 'perdida'])) {
-      return MindoReply(text: _confusion(), state: next.copyWith(lastTopic: 'confusão'));
-    }
-    if (next.lastTopic != null && lower.length < 160) {
+
+    // ── 6. Mensagem longa sem intenção clara → resposta empática aberta ───
+    if (lower.length > 30) {
       return MindoReply(
-        text: _contextualContinue(next.lastTopic!, next.lastEmotion, lower, user),
-        state: next,
+        text: _empatheticOpen(lower, next, user),
+        state: next.copyWith(
+          lastTopic: next.lastTopic ?? 'aberto',
+          awaitingFreeResponse: true,
+          genericResponseIndex: (next.genericResponseIndex + 1) % 5,
+        ),
       );
     }
-    final idx = next.genericResponseIndex;
+
+    // ── 7. Mensagem curta ambígua → pergunta aberta ───────────────────────
     return MindoReply(
-      text: _empathetic(idx, user, next),
-      state: next.copyWith(genericResponseIndex: idx + 1, lastTopic: 'aberto'),
+      text: _shortMessageResponse(next, user),
+      state: next.copyWith(
+        lastTopic: next.lastTopic ?? 'aberto',
+        awaitingFreeResponse: true,
+      ),
     );
   }
 
-  static String welcomeMessage(String name) {
-    final n = name.isNotEmpty ? ', $name' : '';
-    return 'Oi$n! 💜 Sou o **Mindo** — companheiro emocional do MindFlow.\n\n'
-        'Converso com memória da sessão, guio meditação, aplico técnicas de CBT e mindfulness '
-        '(sem substituir terapia). Como você está agora?';
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // Detecção de intenção — ordem de especificidade (mais específico = mais peso)
+  // ─────────────────────────────────────────────────────────────────────────
 
-  String? _detectTone(String lower) {
-    if (_containsAny(lower, ['ansiedad', 'nervos', 'preocup', 'panico'])) return 'ansiedade';
-    if (_containsAny(lower, ['triste', 'chor', 'vazio', 'deprim'])) return 'tristeza';
-    if (_containsAny(lower, ['raiva', 'irritad', 'frustrad'])) return 'raiva';
-    if (_containsAny(lower, ['cansad', 'esgot', 'burnout'])) return 'estresse';
-    return null;
-  }
+  _Topic _detectPrimaryIntent(String lower) {
+    // Crise já tratada antes
+    // Meditação guiada — precisa de palavras bem específicas
+    if (_any(lower, [
+      'meditação guiada', 'meditacao guiada', 'me guie', 'me guia',
+      'quero meditar', 'iniciar meditação', 'iniciar meditacao',
+      'sessão guiada', 'sessao guiada',
+    ])) return _Topic.meditation;
 
-  String _reflectiveInsight(String lower, String tone, MindoUserContext user, MindoConversationState state) {
-    final name = user.displayName.isNotEmpty ? user.displayName : 'você';
-    final prev = state.recentUserMessages.length >= 2
-        ? state.recentUserMessages[state.recentUserMessages.length - 2]
-        : '';
-    final bridge = prev.isNotEmpty
-        ? '\n\nPercebo uma continuidade no que você trouxe antes ("$prev") e agora.'
-        : '';
-    return '''$name, estou processando o que você compartilhou com atenção real. 💜$bridge
+    // CBT
+    if (_any(lower, [
+      'pensamento negativo', 'nao consigo parar de pensar', 'não consigo parar de pensar',
+      'ruminação', 'ruminacao', 'mente acelerada', 'reformular pensamento',
+      'pensamento automático', 'loop na cabeça',
+    ])) return _Topic.cbtReframe;
 
-Pelo tom da sua mensagem, parece haver **$tone** presente. Isso não define quem você é — é um estado que pode ser acolhido.
+    // Respiração sem meditação guiada
+    if (_any(lower, [
+      'técnica de respiração', 'tecnica de respiracao', 'respiração 4', 'box breathing',
+      'quero respirar', 'me ensina a respirar',
+    ])) return _Topic.breathing;
 
-**Pergunta Mindo:** se essa emoção tivesse uma voz, o que ela estaria pedindo agora — descanso, limite, carinho ou clareza?''';
-  }
+    // Sono — antes de estresse (cansado pode ser das duas)
+    if (_any(lower, [
+      'insônia', 'insonia', 'não consigo dormir', 'nao consigo dormir',
+      'acordando muito', 'sono ruim', 'dormir mal',
+    ])) return _Topic.sleep;
 
-  String _deepFollowUp(MindoConversationState state, MindoUserContext user, String lower) {
-    if (state.guidedMeditationActive || state.lastTopic == 'meditação') {
-      return _guidedMeditationStep(lower, state, user).text;
+    // Crise (já tratada acima, mas mantém consistência)
+    if (_hasCrisis(lower)) return _Topic.crisis;
+
+    // Ansiedade — palavras bem específicas
+    if (_any(lower, [
+      'ansiedade', 'ansioso', 'ansiosa', 'angústia', 'angustia',
+      'ataque de pânico', 'panico', 'coração acelerado', 'tensão no peito',
+      'preocupado', 'preocupada', 'nervoso demais', 'nervosa demais',
+    ])) return _Topic.anxiety;
+
+    // Tristeza — específicas
+    if (_any(lower, [
+      'triste', 'tristeza', 'chorando', 'chorei', 'chorar',
+      'deprimido', 'deprimida', 'depressão', 'depressao',
+      'sem esperança', 'sem esperanca', 'vazio', 'vazia',
+      'desmotivado', 'desmotivada',
+    ])) return _Topic.sadness;
+
+    // Raiva
+    if (_any(lower, [
+      'raiva', 'com raiva', 'com ódio', 'ódio', 'odio',
+      'frustrado', 'frustrada', 'irritado', 'irritada',
+      'bravo', 'brava', 'com raiva de',
+    ])) return _Topic.anger;
+
+    // Solidão
+    if (_any(lower, [
+      'sozinho', 'sozinha', 'solidão', 'solidao',
+      'me sinto isolado', 'me sinto isolada', 'ninguém me entende',
+      'ninguem me entende', 'sem amigos', 'sem apoio',
+    ])) return _Topic.loneliness;
+
+    // Estresse / burnout
+    if (_any(lower, [
+      'estressado', 'estressada', 'estresse', 'sobrecarregado', 'sobrecarregada',
+      'burnout', 'esgotado', 'esgotada', 'não aguento mais', 'nao aguento mais',
+    ])) return _Topic.stress;
+
+    // Medo — específico
+    if (_any(lower, [
+      'com medo de', 'tenho medo de', 'medo de', 'assustado', 'assustada',
+      'fobia', 'pavor de',
+    ])) return _Topic.fear;
+
+    // Sono (genérico, depois do específico)
+    if (_any(lower, ['cansado', 'cansada', 'exausto', 'exausta', 'sem dormir', 'dormir'])) {
+      return _Topic.sleep;
     }
-    if (state.lastTopic == 'reframe') {
-      return '''Ótimo. 💜 Agora complete:
 
-**Pensamento mais equilibrado:** uma frase gentil e realista sobre a situação.
+    // Positivo — só com palavras claramente positivas E sem negação perto
+    if (_isPositive(lower)) return _Topic.positive;
 
-Ex.: _"Estou com dificuldade agora, mas já superei momentos difíceis antes."_
+    // Relacionamento
+    if (_any(lower, [
+      'meu namorado', 'minha namorada', 'meu parceiro', 'minha parceira',
+      'término', 'termino', 'separação', 'separacao', 'brigar com',
+      'relacionamento', 'namoro',
+    ])) return _Topic.relationship;
 
-Escreva a sua versão.''';
+    // Família
+    if (_any(lower, [
+      'minha mãe', 'meu pai', 'minha familia', 'minha família',
+      'meu irmão', 'minha irmã', 'briga em casa', 'conflito familiar',
+    ])) return _Topic.family;
+
+    // Trabalho / estudo
+    if (_any(lower, [
+      'meu trabalho', 'no trabalho', 'meu chefe', 'minha chefe',
+      'faculdade', 'escola', 'prova amanhã', 'demitido', 'demitida',
+      'perdi o emprego', 'entrevista',
+    ])) return _Topic.work;
+
+    // Gratidão
+    if (_any(lower, [
+      'obrigado', 'obrigada', 'valeu', 'muito obrigado', 'muito obrigada',
+      'me ajudou', 'você ajudou', 'grato', 'grata',
+    ])) return _Topic.gratitude;
+
+    // Confusão
+    if (_any(lower, [
+      'não sei o que sinto', 'nao sei o que sinto',
+      'confuso', 'confusa', 'perdido', 'perdida', 'não sei', 'nao sei',
+    ])) return _Topic.confusion;
+
+    // Saudação simples — só se a mensagem for curta
+    if (lower.length < 35 &&
+        _any(lower, ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'e aí', 'e ai'])) {
+      return _Topic.greeting;
     }
-    return _contextualContinue(state.lastTopic!, state.lastEmotion, lower, user);
+
+    return _Topic.none;
   }
 
-  bool _wantsThoughtReframe(String lower) =>
-      _containsAny(lower, [
-        'pensamento negativo', 'não consigo parar de pensar', 'nao consigo parar',
-        'ruminação', 'ruminacao', 'loop na cabeça', 'mente acelerada',
-        'reformular', 'pensamento automático',
-      ]);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Resposta a mensagem livre (usuário respondendo a uma pergunta do Mindo)
+  // ─────────────────────────────────────────────────────────────────────────
 
-  String _cbtReframe(MindoUserContext user) {
-    final name = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
-    return '''${name}vamos usar um método de **Terapia Cognitivo-Comportamental** (CBT) — em 3 passos:
+  MindoReply _handleFreeResponse(String lower, MindoConversationState state, MindoUserContext user) {
+    final name = _nameComma(user);
+    final topic = state.lastTopic ?? 'aberto';
 
-**1. Situação** — O que aconteceu? (só fatos)
-**2. Pensamento automático** — O que sua mente disse? (ex.: "não vou dar conta")
-**3. Evidências** — Liste 2 fatos que **apoiam** e 2 que **questionam** esse pensamento
+    // CBT reframe — passou pelo passo 1 (situação), agora pede passo 2
+    if (topic == 'reframe') {
+      return MindoReply(
+        text: '''$name anotei. 🧠💜
 
-Depois escreva um **pensamento alternativo** mais justo.
+**Passo 2 — Pensamento automático:** qual foi a primeira frase que sua mente disse quando isso aconteceu?
 
-Responda o passo 1 quando quiser — vou te acompanhar. 🧠💜''';
+Ex.: _"Não vou dar conta"_, _"Todo mundo vai me julgar"_, _"Nunca vai melhorar"_...
+
+Escreva o seu.''',
+        state: state.copyWith(lastTopic: 'reframe_p2', awaitingFreeResponse: true),
+      );
+    }
+
+    if (topic == 'reframe_p2') {
+      return MindoReply(
+        text: '''$name esse pensamento é muito humano. 💜
+
+**Passo 3 — Evidências:**
+• Cite **2 fatos** que *apoiam* esse pensamento
+• Cite **2 fatos** que *questionam* ou contradizem ele
+
+Depois escreva: _"Um pensamento mais equilibrado seria..."_
+
+Pode ir passo a passo, sem pressa.''',
+        state: state.copyWith(lastTopic: 'reframe_p3', awaitingFreeResponse: true),
+      );
+    }
+
+    if (topic == 'reframe_p3') {
+      return MindoReply(
+        text: '''$name excelente trabalho. 🌟 Isso é CBT na prática — você acabou de treinar o músculo da mente.
+
+Como está se sentindo **agora** em comparação ao início da conversa?''',
+        state: state.copyWith(lastTopic: 'reflexão', awaitingFreeResponse: true),
+      );
+    }
+
+    // Meditação concluída — usuário responde como está o corpo
+    if (topic == 'meditação') {
+      if (_any(lower, ['leve', 'melhor', 'calmo', 'calma', 'tranquilo', 'tranquila', 'bem'])) {
+        return MindoReply(
+          text: '${name}fico feliz! 🌿 Presença é prática — cada vez fica mais fácil. Como está o resto do dia?',
+          state: state.copyWith(lastTopic: 'positivo', awaitingFreeResponse: true),
+        );
+      }
+      if (_any(lower, ['igual', 'tenso', 'tensa', 'ainda', 'não mudou', 'nao mudou'])) {
+        return MindoReply(
+          text: '''${name}tudo bem — às vezes a calma chega depois. 💜
+
+Quer tentar uma técnica rápida de ancoragem agora? Foca em **5 coisas que você enxerga** no ambiente. Me conta o que você vê.''',
+          state: state.copyWith(lastTopic: 'ansiedade', awaitingFreeResponse: true),
+        );
+      }
+    }
+
+    // Resposta genérica contextual baseada no último tópico
+    final Map<String, String> topicFollowUps = {
+      'ansiedade':
+          '${name}obrigado por compartilhar. 💜 O pensamento que está em loop agora — ele é sobre o passado, o presente ou o futuro?',
+      'tristeza':
+          '${name}sentir isso mostra que algo importante foi tocado. 💜 O que você mais precisaria agora: silêncio, movimento ou conversar mais?',
+      'raiva':
+          '${name}raiva traz informação importante sobre seus limites. 💜 Você consegue identificar o momento exato em que ela apareceu?',
+      'solidão':
+          '${name}contar isso já é um passo corajoso. 💜 Há alguém específico com quem você gostaria de se conectar, ou é uma sensação mais geral?',
+      'estresse':
+          '${name}entendido. 💜 Das coisas que estão pesando, qual você tem **zero** controle — e pode deixar de lado por agora?',
+      'medo':
+          '${name}obrigado por confiar. 💜 Esse medo aparece o tempo todo ou em situações específicas?',
+      'sono':
+          '${name}sono e emoção caminham juntos. 💜 Quando você deita, sua mente acelera ou o corpo fica inquieto?',
+      'relacionamento':
+          '${name}conte mais. 💜 O que você precisaria que acontecesse para essa situação melhorar?',
+      'família':
+          '${name}família é complexa — amor e história juntos. 💜 Você se sente ouvido(a) por eles?',
+      'trabalho':
+          '${name}trabalho pode pesar muito. 💜 Isso está afetando só o humor ou já está impactando o sono e o corpo?',
+      'saudacao':
+          '${name}fico aqui com você. 💜 O que mais está presente agora — algo que aconteceu, ou uma sensação sem causa clara?',
+      'reflexão':
+          '${name}isso é perspectiva real. 💜 O que essa percepção muda, mesmo que um pouquinho, daqui pra frente?',
+    };
+
+    final followUp = topicFollowUps[topic];
+    if (followUp != null) {
+      return MindoReply(
+        text: followUp,
+        state: state.copyWith(awaitingFreeResponse: true),
+      );
+    }
+
+    // Fallback
+    return MindoReply(
+      text: '${name}estou acompanhando com atenção. 💜 O que você está sentindo agora, neste momento?',
+      state: state.copyWith(awaitingFreeResponse: true),
+    );
   }
 
-  String _sleepSupport(MindoUserContext user) =>
-      '''Sono e humor estão ligados. 😴 💜
+  // ─────────────────────────────────────────────────────────────────────────
+  // Resposta empática para mensagens longas sem intenção clara
+  // ─────────────────────────────────────────────────────────────────────────
 
-**Higiene rápida Mindo:**
-• Luz baixa 1h antes de dormir
-• Evitar telas ou usar modo noturno
-• 4-7-8: inspire 4s, segure 7s, solte 8s (4 vezes)
+  String _empatheticOpen(String lower, MindoConversationState state, MindoUserContext user) {
+    final name = _nameComma(user);
+    final idx = state.genericResponseIndex % 5;
 
-${user.loggedMoodToday ? '' : 'Registre como está agora no humor — ajuda a ver padrões sono ↔ emoção.'}
+    final List<String> responses = [
+      '${name}estou lendo o que você escreveu com atenção real. 💜\n\nO que mais pesa nisso tudo que você descreveu?',
+      '${name}obrigado por compartilhar isso comigo. 💜\n\nSe tivesse que colocar em uma palavra o que está sentindo agora, qual seria?',
+      '${name}faz sentido sentir isso. 💜\n\nO que aconteceu que trouxe esse estado — algo específico ou é uma acumulação?',
+      '${name}estou aqui, sem pressa. 💜\n\nAlguma coisa no que você descreveu está no seu controle agora, mesmo que pequena?',
+      '${name}sua mensagem mostra alguém que está tentando processar algo difícil. 💜\n\nO que você precisaria agora: ser ouvido(a), uma técnica de alívio, ou clareza?',
+    ];
 
-O que mais atrapalha seu sono: mente acelerada, preocupação ou corpo inquieto?''';
-
-  bool _wantsGuidedMeditation(String lower) =>
-      _containsAny(lower, [
-        'meditação guiada', 'meditacao guiada', 'me guie', 'me guia',
-        'meditar com você', 'meditar com voce', 'sessão guiada', 'sessao guiada',
-        'quero meditar', 'iniciar meditação', 'iniciar meditacao',
-      ]);
-
-  bool _isExplicitGreeting(String lower) {
-    final greetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'e aí', 'e ai', 'hey', 'hello'];
-    return greetings.any((g) => lower == g || (lower.length < 30 && lower.startsWith(g)));
+    return responses[idx];
   }
 
-  bool _isFollowUp(String lower) =>
-      _containsAny(lower, [
-        'sim', 'continua', 'continue', 'próximo', 'proximo', 'ok', 'certo',
-        'entendi', 'pode', 'vamos', 'segue', 'e depois', 'e agora', 'pronto',
-      ]);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Resposta para mensagens curtas ambíguas
+  // ─────────────────────────────────────────────────────────────────────────
 
-  bool _isCrisisContinuation(String lower) =>
-      _containsAny(lower, ['ainda', 'pior', 'medo', 'choro', 'não aguento', 'nao aguento']);
+  String _shortMessageResponse(MindoConversationState state, MindoUserContext user) {
+    final name = _nameComma(user);
+
+    // Se há tópico anterior, usa ele como gancho
+    if (state.lastTopic != null && state.lastTopic != 'aberto') {
+      return '${name}continue à vontade. 💜 Me conta mais sobre o que está sentindo.';
+    }
+
+    return '${name}pode falar mais sobre isso? 💜 Estou aqui para ouvir sem julgamento.';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers de detecção
+  // ─────────────────────────────────────────────────────────────────────────
+
+  bool _hasCrisis(String lower) => _any(lower, [
+        'suicid', 'me matar', 'quero morrer', 'não quero mais viver',
+        'nao quero mais viver', 'acabar com tudo', 'me machucar',
+        'automutilação', 'automutilacao', 'desaparecer para sempre',
+        'não vale a pena viver', 'nao vale a pena viver',
+      ]);
 
   bool _isPositive(String lower) {
-    if (_containsAny(lower, ['não estou bem', 'nao estou bem', 'mal', 'ruim', 'péssim', 'pessim', 'horrível'])) {
-      return false;
-    }
-    return _containsAny(lower, [
-      'feliz', 'ótimo', 'otimo', 'bem demais', 'maravilhoso', 'alegre',
-      'contente', 'realizado', 'realizada', 'orgulhoso', 'gratidão', 'gratidao',
+    // Não marca como positivo se há negação + palavra positiva
+    final hasNegation = _any(lower, [
+      'não estou bem', 'nao estou bem', 'não me sinto', 'nao me sinto',
+      'mal', 'ruim', 'péssimo', 'pessimo', 'horrível', 'horrivel',
+      'cansado', 'cansada', 'exausto', 'exausta',
+    ]);
+    if (hasNegation) return false;
+    return _any(lower, [
+      'feliz', 'muito bem', 'ótimo', 'otimo', 'maravilhoso', 'maravilhosa',
+      'alegre', 'contente', 'realizado', 'realizada', 'orgulhoso', 'orgulhosa',
+      'gratidão', 'gratidao', 'animado', 'animada',
     ]);
   }
 
-  MindoReply _guidedMeditationStep(String lower, MindoConversationState state, MindoUserContext user) {
-    if (_containsAny(lower, ['parar', 'cancelar', 'sair', 'encerrar'])) {
+  bool _any(String text, List<String> keywords) {
+    for (final kw in keywords) {
+      if (text.contains(kw)) return true;
+    }
+    return false;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Meditação guiada
+  // ─────────────────────────────────────────────────────────────────────────
+
+  MindoReply _advanceMeditation(
+      String lower, MindoConversationState state, MindoUserContext user) {
+    if (_any(lower, ['parar', 'cancelar', 'sair', 'encerrar', 'chega'])) {
       return MindoReply(
-        text: 'Sessão encerrada com cuidado. 💜 Respire fundo. Estou aqui — ou use **Meditação Flow** com sons imersivos.',
-        state: state.copyWith(endGuided: true),
+        text: 'Sessão encerrada com cuidado. 💜 Respire fundo uma vez. Estou aqui — como está se sentindo?',
+        state: state.copyWith(endGuided: true, lastTopic: 'meditação', awaitingFreeResponse: true),
       );
     }
+
     final step = state.guidedMeditationStep + 1;
-    final texts = _guidedSteps(user);
-    if (step >= texts.length) {
+    final steps = _guidedSteps(user);
+
+    if (step >= steps.length) {
       return MindoReply(
         text: '''🧘✨ **Sessão guiada concluída.**
 
 Você praticou presença — isso é saúde mental ativa. Registre seu humor no app.
 
-Como está o corpo: mais leve, igual ou tenso?''',
-        state: state.copyWith(endGuided: true, lastTopic: 'meditação'),
+Como está o corpo agora: mais leve, igual ou ainda tenso?''',
+        state: state.copyWith(endGuided: true, lastTopic: 'meditação', awaitingFreeResponse: true),
       );
     }
+
     return MindoReply(
-      text: texts[step],
+      text: steps[step],
       state: state.copyWith(guidedMeditationStep: step, lastTopic: 'meditação'),
     );
   }
@@ -397,189 +675,236 @@ Como está o corpo: mais leve, igual ou tenso?''',
   List<String> _guidedSteps(MindoUserContext user) => [
         _guidedIntro(user),
         '''**Passo 1 — Chegada** 🌿
-Ajuste a postura. Inspire **4**, segure **4**, expire **6** (3 ciclos).
-Digite **"próximo"** quando pronto(a).''',
-        '''**Passo 2 — Corpo** 🫁
-Escaneie: pés → pernas → barriga → peito → rosto. Solte tensão em cada região.
+
+Ajuste a postura. Feche os olhos.
+Inspire pelo nariz contando **4** · Segure **4** · Expire pela boca contando **6**.
+Faça 3 ciclos assim.
+
+Quando terminar, diga **"próximo"**.''',
+        '''**Passo 2 — Escaneamento do corpo** 🫁
+
+Atenção nos pés → pernas → quadril → barriga → peito → ombros → rosto.
+Em cada região: perceba, sem forçar, e deixe soltar.
+
 **"próximo"** para continuar.''',
-        '''**Passo 3 — Âncora mental** 💜
-Repita: _"Neste momento, estou seguro(a) o suficiente para respirar."_
-**"próximo"** quando sentir.''',
+        '''**Passo 3 — Âncora** 💜
+
+Repita internamente 3 vezes:
+_"Agora mesmo, estou seguro(a) o suficiente para respirar."_
+
+Fique 20 segundos em silêncio.
+
+**"próximo"** quando estiver pronto(a).''',
         '''**Passo 4 — Gratidão** ✨
-Uma coisa pequena de hoje que ainda existe. Silêncio 20s. Abra os olhos devagar.''',
+
+Pense em uma coisa pequena de hoje que ainda existe — pode ser o café, a luz pela janela, um som agradável.
+
+Fique com essa imagem por 15 segundos.
+
+**"próximo"** para encerrar.''',
       ];
 
   String _guidedIntro(MindoUserContext user) {
     final name = user.displayName.isNotEmpty ? ', ${user.displayName}' : '';
     return '''🧘 **Meditação guiada Mindo**$name
 
-Condução passo a passo (~5 min). Responda **"próximo"** para avançar · **"parar"** para encerrar.
+Vou te conduzir passo a passo (~5 min). Responda **"próximo"** para avançar — **"parar"** para encerrar a qualquer momento.
 
-Para áudio ambiente: **Meditação Flow** no app.
+Para áudio ambiente durante a meditação: acesse **Meditação Flow** no app.
 
-Quando estiver pronto(a), diga **"próximo"**.''';
+Quando estiver confortável, diga **"próximo"**.''';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Respostas por tópico
+  // ─────────────────────────────────────────────────────────────────────────
+
+  String _crisisResponse(MindoUserContext user) {
+    final name = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+    return '''${name}obrigado por confiar em mim. O que você sente é real e pesado — você não está sozinho(a). 💜
+
+**Se precisar de apoio imediato:**
+🆘 **CVV — ligue 188** (24h, gratuito)
+🌐 **cvv.org.br** (chat online)
+
+Estou aqui. O que está acontecendo neste momento?''';
   }
 
   String _greeting(MindoUserContext user) {
     final hour = DateTime.now().hour;
-    final g = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+    final period = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
     final name = user.displayName.isNotEmpty ? ', ${user.displayName}' : '';
-    final journey = user.daysOnJourney <= 1
-        ? 'Primeiro dia oficial na sua jornada — começamos do zero, com intenção.'
-        : 'Dia **${user.daysOnJourney}** · nível **${user.level.label}** ${user.level.emoji} · **${user.totalXp}** XP';
+    final journeyInfo = user.daysOnJourney <= 1
+        ? 'Primeiro dia — começamos com intenção.'
+        : 'Dia **${user.daysOnJourney}** · nível **${user.level.label}** ${user.level.emoji} · **${user.totalXp} XP**';
     final streak = user.currentStreak >= 2 ? '\n🔥 Sequência: **${user.currentStreak}** dias.' : '';
     final moodTip = user.loggedMoodToday
         ? ''
-        : '\n📊 Registrar o humor hoje desbloqueia insights no Mapa Emocional.';
-    return '$g$name! 💜 $journey$streak$moodTip\n\nO que está mais presente em você agora?';
+        : '\n📊 Lembre de registrar seu humor hoje.';
+
+    return '$period$name! 💜 $journeyInfo$streak$moodTip\n\nO que está mais presente em você agora?';
   }
 
-  String _contextualContinue(String topic, String? emotion, String lower, MindoUserContext user) {
-    final name = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
-    const map = {
-      'ansiedade': 'qual pensamento específico está em loop agora? Nomear reduz a intensidade em até 30%.',
-      'tristeza': 'o que mudou, mesmo que um pouco, desde que você começou a falar?',
-      'raiva': 'que limite foi cruzado? O que você precisava que acontecesse de diferente?',
-      'solidão': 'é solidão física ou de não ser compreendido(a)?',
-      'estresse': 'se só pudesse resolver UMA coisa hoje, qual aliviaria mais?',
-      'relacionamento': 'o que você precisa agora: ser ouvido(a), espaço ou clareza?',
-      'trabalho': 'o que está no seu controle nas próximas 24 horas?',
-      'meditação': 'como está o corpo após respirar — mais leve ou ainda tenso?',
-      'reflexão': 'o que essa emoção pede de você com gentileza?',
-      'aberto': 'pode descrever o que sente no corpo agora (peito, estômago, garganta)?',
-    };
-    return '${name}continuo aqui. 💜 ${map[topic] ?? map['aberto']!}';
-  }
+  String _anxiety(String lower, MindoUserContext user) {
+    final name = _nameComma(user);
+    if (_any(lower, ['coração acelerado', 'sufocando', 'tremendo', 'não consigo respirar', 'peito apertado'])) {
+      return '''${name}seu corpo está em modo de proteção — é biológico, não é fraqueza. 💜
 
-  String _anxiety(String input, MindoUserContext user) {
-    final name = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
-    if (_containsAny(input, ['coração', 'respiraçã', 'sufocand', 'tremendo'])) {
-      return '''$name seu corpo está em modo proteção — biológico, não é exagero. 💜
+**Agora:** inspire pelo nariz contando 4 · segure 7 · solte pela boca contando 8.
+Repita 3 vezes.
 
-**4-7-8 agora:** inspire 4s · segure 7s · solte 8s (×3).
-
-O que disparou isso?''';
+Estou aqui. O que disparou isso?''';
     }
-    return '''$name ansiedade consome energia do corpo. 💜
+    return '''${name}ansiedade é pesada — e você fez bem em falar sobre isso. 💜
 
-**5-4-3-2-1** (grounding) ou diga **"meditação guiada"**.
+**Técnica 5-4-3-2-1** (grounding):
+5 coisas que você *vê* · 4 que *toca* · 3 que *ouve* · 2 que *cheira* · 1 que *sente*.
 
 Qual pensamento está mais alto agora?''';
   }
 
-  String _nameComma(MindoUserContext user) =>
-      user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+  String _sadness(String lower, MindoUserContext user) {
+    final name = _nameComma(user);
+    if (_any(lower, ['depressão', 'depressao', 'deprimido', 'deprimida', 'sem esperança', 'sem esperanca'])) {
+      return '''${name}obrigado por confiar — isso é sofrimento real, não fraqueza. 🫂
 
-  String _nameLine(MindoUserContext user) =>
-      user.displayName.isNotEmpty ? '${user.displayName}\n' : '';
+Há quanto tempo está assim? Está conseguindo comer e dormir?
 
-  String _sadness(String input, MindoUserContext user) {
-    final prefix = _nameComma(user);
-    if (_containsAny(input, ['depressão', 'depressao', 'deprimid', 'sem esperança'])) {
-      return '''${prefix}obrigado por confiar. 🫂 Isso é sofrimento real, não fraqueza.
-
-Há quanto tempo? Está comendo e dormindo?
-
-Se persistir, apoio profissional ajuda muito. O que pesa mais hoje?''';
+Se esse estado persistir, um profissional pode ajudar muito. O que pesa mais hoje?''';
     }
-    return '''${prefix}tristeza mostra que algo importava. 🫂 Não precisa estar bem agora.
+    return '''${name}tristeza mostra que algo que importa foi tocado. 🫂
+
+Você não precisa estar bem agora.
 
 O que aconteceu?''';
   }
 
   String _anger(MindoUserContext user) {
-    final prefix = _nameComma(user);
-    return '''$prefix raiva sinaliza limite cruzado. 💜 Você está seguro(a)?
+    final name = _nameComma(user);
+    return '''${name}raiva sinaliza que um limite foi cruzado — é uma emoção válida. 💜
 
-Respire 3× devagar. O que aconteceu?''';
+Você está seguro(a) agora?
+
+Respire devagar 3 vezes. O que aconteceu?''';
   }
 
   String _loneliness(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix buscar apoio aqui já é coragem. 💜
+    final name = _nameComma(user);
+    return '''${name}buscar apoio aqui já é coragem. 💜
 
-Solidão física ou de não ser compreendido(a)?''';
+É solidão de estar fisicamente só, ou de sentir que ninguém te compreende de verdade?''';
   }
 
   String _stress(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix estresse acumulado tem limite. 💜
+    final name = _nameComma(user);
+    return '''${name}estresse acumulado tem peso. 💜
 
-30s: olhos fechados, ombros soltos.
+Tente agora: 30 segundos com os olhos fechados, ombros soltos.
 
-O que pesa mais — trabalho, relações ou tudo?''';
+O que está pesando mais — trabalho, relações, ou tudo ao mesmo tempo?''';
   }
 
-  String _fear(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix medo tenta proteger. 💜 É algo específico ou difuso?
+  String _fear(String lower, MindoUserContext user) {
+    final name = _nameComma(user);
+    return '''${name}medo tenta proteger — mas às vezes ele exagera. 💜
 
-Pergunte: probabilidade real? Como eu lidaria se acontecesse?
+É medo de algo específico ou uma sensação difusa de que algo vai dar errado?
 
-Do que tem medo agora?''';
+Do que exatamente você está com medo agora?''';
+  }
+
+  String _sleepSupport(MindoUserContext user) {
+    final name = _nameComma(user);
+    return '''${name}sono e humor estão diretamente ligados. 😴💜
+
+**Higiene rápida Mindo:**
+• Luz baixa 1h antes de dormir
+• Evitar telas (ou usar modo noturno)
+• **4-7-8**: inspire 4s · segure 7s · solte 8s (×3 antes de deitar)
+
+${user.loggedMoodToday ? '' : 'Registrar o humor no app ajuda a ver padrões sono ↔ emoção.\n'}
+O que mais atrapalha: mente acelerada, preocupação ou corpo inquieto?''';
   }
 
   String _positive(MindoUserContext user) {
-    final prefix = _nameComma(user);
-    final streak = user.currentStreak >= 3 ? ' 🔥 ${user.currentStreak} dias de sequência!' : '';
-    return '''$prefix que energia boa! 🌟 Registre no humor do app.$streak
+    final name = _nameComma(user);
+    final streak = user.currentStreak >= 3 ? ' 🔥 ${user.currentStreak} dias seguidos!' : '';
+    return '''${name}que energia boa! 🌟$streak
 
-O que contribuiu para esse bem-estar?''';
+Registra isso no humor do app — ajuda a ver o que contribui para os bons momentos.
+
+O que aconteceu de especial hoje?''';
   }
 
   String _relationship(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix relacionamentos tocam o vulnerável. 💜 Conte sem filtro o que está acontecendo.''';
+    final name = _nameComma(user);
+    return '''${name}relacionamentos tocam o mais vulnerável em nós. 💜
+
+Pode contar sem filtro — o que está acontecendo?''';
   }
 
   String _family(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix família é complexa — amor e história juntos. 💜 O que está pesando?''';
+    final name = _nameComma(user);
+    return '''${name}família é amor e história misturados — e nem sempre é simples. 💜
+
+O que está pesando agora?''';
   }
 
   String _work(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix trabalho/estudo drenam quando pressionam demais. 💜
+    final name = _nameComma(user);
+    return '''${name}trabalho e estudo drenam quando a pressão é alta. 💜
 
-É pontual ou acumulado há tempo?''';
+Isso está acontecendo há pouco ou vem se acumulando?''';
   }
 
-  String _breathing() =>
-      '''**Box 4-4-4-4** ou diga **"meditação guiada"** para condução completa. 🧘''';
+  String _breathingTechnique() =>
+      '''**Técnica Box Breathing (4-4-4-4)** 🧘
+
+Inspire 4s → Segure 4s → Expire 4s → Segure 4s.
+
+Repita 4 vezes. Quando terminar, me conta como está.
+
+Se quiser uma sessão completa guiada, diga **"meditação guiada"**.''';
+
+  String _cbtReframe(MindoUserContext user) {
+    final name = user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
+    return '''${name}vamos usar **Terapia Cognitivo-Comportamental (CBT)** em 3 passos. 🧠💜
+
+**Passo 1 — Situação:** descreva o que aconteceu *em fatos*, sem interpretação.
+
+Ex.: _"Meu chefe não respondeu meu e-mail"_, _"Fui ignorado(a) numa conversa"_
+
+Escreva sua situação quando quiser — vou te acompanhar passo a passo.''';
+  }
 
   String _gratitude(MindoUserContext user) {
-    final prefix = _nameLine(user);
-    return '''$prefix fico feliz em apoiar — o mérito é seu por cuidar de si. 💜
+    final name = _nameComma(user);
+    return '''${name}fico feliz em poder apoiar. O mérito é seu por cuidar de si. 💜
 
-Como está agora, depois de conversar?''';
+Como está se sentindo agora, depois de conversar?''';
   }
 
   String _confusion() =>
-      '''Tudo bem não saber o que sente. 💜 Onde no corpo há sensação agora?''';
+      '''Tudo bem não saber exatamente o que está sentindo. 💜
 
-  String _empathetic(int index, MindoUserContext user, MindoConversationState state) {
-    final prefix = _nameComma(user);
-    final pool = [
-      '${prefix}o que você trouxe importa. 💜 O que sente no corpo neste instante?',
-      '${prefix}estou acompanhando com atenção plena. 💜 O que aconteceu antes desse estado?',
-      '${prefix}se pudesse mudar uma coisa hoje, qual seria?',
-      '${prefix}quer **meditação guiada**, técnica **CBT** (pensamento negativo) ou continuar conversando?',
-      '${prefix}leio sua mensagem como alguém que precisa ser ouvido(a) sem pressa — pode continuar.',
-    ];
-    if (state.rapportLevel >= 4) {
-      return '''${prefix}já estamos construindo um fio de confiança nesta conversa. 💜
+Vamos devagar. Onde no corpo você percebe alguma sensação agora — peito, estômago, garganta?''';
 
-Não preciso de internet para te acompanhar — uso memória da sessão, técnicas validadas e o contexto do seu perfil no MindFlow.
+  // ─────────────────────────────────────────────────────────────────────────
+  // Mensagem de boas-vindas (estática)
+  // ─────────────────────────────────────────────────────────────────────────
 
-${pool[index % pool.length]}''';
-    }
-    return pool[index % pool.length];
+  static String welcomeMessage(String name) {
+    final n = name.isNotEmpty ? ', $name' : '';
+    return 'Oi$n! 💜 Sou o **Mindo**, companheiro emocional do MindFlow.\n\n'
+        'Estou aqui para ouvir, apoiar e oferecer técnicas de mindfulness e CBT — '
+        'sem substituir um profissional de saúde mental.\n\n'
+        'Como você está se sentindo agora?';
   }
 
-  bool _containsAny(String text, List<String> keywords) {
-    for (final kw in keywords) {
-      if (text.contains(kw)) return true;
-    }
-    return false;
-  }
+  // ─────────────────────────────────────────────────────────────────────────
+  // Utilitários
+  // ─────────────────────────────────────────────────────────────────────────
+
+  String _nameComma(MindoUserContext user) =>
+      user.displayName.isNotEmpty ? '${user.displayName}, ' : '';
 }
