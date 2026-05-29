@@ -295,7 +295,16 @@ class MindoMessagesNotifier
     required String content,
     required MessageRole role,
   }) async {
-    await _initCompleter.future;
+    try {
+      await _initCompleter.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw TimeoutException('Timeout ao inicializar mensagens'),
+      );
+    } catch (e) {
+      // Se falhar a inicialização, retorna erro
+      throw Exception('Erro ao inicializar provider de mensagens: $e');
+    }
+    
     final id = const Uuid().v4();
     final now = DateTime.now();
     final msg = AiMessage(

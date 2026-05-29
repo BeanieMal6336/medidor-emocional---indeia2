@@ -57,6 +57,10 @@ class _MoodTrackerPageState extends ConsumerState<MoodTrackerPage> {
         return Emotion(type: type, intensity: intensity);
       }).toList();
 
+      if (emotions.isEmpty) {
+        throw Exception('Selecione ao menos uma emoção');
+      }
+
       await ref.read(moodNotifierProvider.notifier).addEntry(
             overallMood: _overallMood,
             emotions: emotions,
@@ -78,10 +82,8 @@ class _MoodTrackerPageState extends ConsumerState<MoodTrackerPage> {
           SnackBar(content: Text('Erro ao salvar registro: $e')),
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      setState(() => _isSaving = false);
+      return;
     }
   }
 

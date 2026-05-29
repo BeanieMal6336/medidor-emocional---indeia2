@@ -25,7 +25,9 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   final _scrollController = ScrollController();
   final _engine = MindoEngine();
   bool _isTyping = false;
+  bool _isCreatingConversation = false; // Evita criações concorrentes
   MindoConversationState _conversationState = const MindoConversationState();
+  List<AiMessage> _cachedMessages = []; // Mantém mensagens visíveis durante transições
 
   // ID da conversa ativa (gerenciado pelo provider)
   String? _conversationId;
@@ -38,46 +40,105 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
     });
   }
 
-  // ── Garante que existe uma conversa ativa ao abrir a página ─────────────
-  Future<void> _ensureActiveConversation() async {
-    final activeId = ref.read(activeConversationIdProvider);
-    if (activeId != null) {
-      setState(() => _conversationId = activeId);
-      _loadConversationState();
-      _scrollToBottom();
-      return;
-    }
+// ── Garante que existe uma conversa ativa ao abrir a página ─────────────
+   Future<void> _ensureActiveConversation() async {
+     final activeId = ref.read(activeConversationIdProvider);
+     if (activeId != null) {
+       setState(() => _conversationId = activeId);
+       _loadConversationState();
+       _scrollToBottom();
+       return;
+     }
 
-    final conversationsState = ref.read(mindoConversationsProvider);
-    if (conversationsState is AsyncData<List<MindoConversation>>) {
-      final conversations = conversationsState.value;
-      if (conversations.isNotEmpty) {
-        final latest = conversations.first;
-        ref.read(activeConversationIdProvider.notifier).state = latest.id;
-      } else {
-        await _createNewConversation(silent: true);
-      }
-    }
-  }
+     final conversationsAsync = ref.read(mindoConversationsProvider);
+     conversationsAsync.whenOrNull(
+       data: (conversations) async {
+         if (conversations.isNotEmpty) {
+           final latest = conversations.first;
+           ref.read(activeConversationIdProvider.notifier).state = latest.id;
+           if (mounted) {
+             setState(() => _conversationId = latest.id);
+             _loadConversationState();
+           }
+         } else {
+           await _createNewConversation(silent: true);
+         }
+       },
+       error: (_) async {
+         // Se erro, tenta criar nova conversa
+         await _createNewConversation(silent: true);
+       },
+     );
+     // Se ainda está carregando, o listen vai tratar quando carregar
+   }
 
-  // ── Cria nova conversa e envia mensagem de boas-vindas ──────────────────
-  Future<void> _createNewConversation({bool silent = false}) async {
-    final conv = await ref
-        .read(mindoConversationsProvider.notifier)
-        .createConversation();
+// ── Cria nova conversa e envia mensagem de boas-vindas ──────────────────
+   Future<void> _createNewConversation({bool silent = false}) async {
+     // Evita criações concorrentes (ex: duplo clique ou race condition)
+     if (_isCreatingConversation) return;
+     setState(() => _isCreatingConversation = true);
 
-    ref.read(activeConversationIdProvider.notifier).state = conv.id;
+     try {
+       final conv = await ref
+           .read(mindoConversationsProvider.notifier)
+           .createConversation();
 
-    // Mensagem de boas-vindas
-    final profile = ref.read(userProfileNotifierProvider).value;
-    final name = profile?.displayName ?? '';
-    await ref.read(mindoMessagesProvider(conv.id).notifier).addMessage(
-          content: MindoEngine.welcomeMessage(name),
-          role: MessageRole.assistant,
-        );
-  }
+       if (!mounted) return;
 
-  // ── Carrega o estado da conversa (contexto do motor Mindo) ───────────────
+       ref.read(activeConversationIdProvider.notifier).state = conv.id;
+       setState(() => _conversationId = conv.id);
+
+       // Mensagem de boas-vindas - aguarda o provider estar pronto
+       final profileAsync = ref.read(userProfileNotifierProvider);
+       String name = '';
+       
+       if (profileAsync.hasValue) {
+         final profile = profileAsync.value;
+         name = profile?.displayName ?? profile?.name ?? '';
+       }
+       
+       // Aguarda um frame para garantir que o provider de mensagens foi criado
+       await Future.delayed(const Duration(milliseconds: 100));
+       
+       if (!mounted) return;
+       
+       try {
+         // Aguarda o provider estar inicializado
+         final messagesNotifier = ref.read(mindoMessagesProvider(conv.id).notifier);
+         await messagesNotifier.addMessage(
+               content: MindoEngine.welcomeMessage(name),
+               role: MessageRole.assistant,
+             );
+         
+         // Carrega estado após mensagem ser salva
+         if (mounted) {
+           _loadConversationState();
+           _scrollToBottom();
+         }
+       } catch (e) {
+         // Corrige o erro silencioso - mostra snackbar se falhar
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+             SnackBar(content: Text('Erro ao iniciar conversa: $e')),
+           );
+           // Mesmo com erro, carrega o estado
+           _loadConversationState();
+           _scrollToBottom();
+         }
+       }
+     } catch (e) {
+       // Erro na criação da conversa
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text('Erro ao criar conversa: $e')),
+         );
+       }
+     } finally {
+       if (mounted) setState(() => _isCreatingConversation = false);
+     }
+   }
+
+   // ── Carrega o estado da conversa (contexto do motor Mindo) ───────────────
   void _loadConversationState() {
     final messages =
         ref.read(mindoMessagesProvider(_conversationId!)).value ?? [];
@@ -198,7 +259,9 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
   // ── Confirma reset e cria nova conversa ─────────────────────────────────
   Future<void> _resetConversation() async {
-    showDialog(
+    // await garante que o dialog seja tratado de forma síncrona,
+    // evitando race conditions com o ref.listen
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: AppColors.bgMedium,
@@ -215,15 +278,12 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancelar',
                 style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _createNewConversation();
-            },
+            onPressed: () => Navigator.pop(context, true),
             child: const Text('Nova Conversa',
                 style: TextStyle(
                     color: AppColors.primary,
@@ -232,6 +292,11 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         ],
       ),
     );
+
+    // Só cria nova conversa se o usuário confirmou
+    if (confirmed == true && mounted) {
+      await _createNewConversation();
+    }
   }
 
   // ── Abre o histórico de conversas ────────────────────────────────────────
@@ -277,9 +342,16 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
               if (conversations.isNotEmpty) {
                 final latest = conversations.first;
                 ref.read(activeConversationIdProvider.notifier).state = latest.id;
-              } else {
+              } else if (!_isCreatingConversation) {
+                // Só cria se não estiver já criando
                 _createNewConversation(silent: true);
               }
+            }
+          },
+          error: (_) {
+            // Se erro, garante que não fica travado
+            if (!_isCreatingConversation) {
+              _createNewConversation(silent: true);
             }
           },
         );
@@ -288,9 +360,15 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
     // Escuta a conversa ativa para sincronizar o estado da UI local
     ref.listen<String?>(activeConversationIdProvider, (previous, next) {
+      // Ignora transições para null durante criação de nova conversa
+      // para evitar limpar a UI momentaneamente
+      if (next == null && _isCreatingConversation) return;
+
       if (next != previous) {
         setState(() {
-          _conversationId = next;
+          // Só atualiza _conversationId se o próximo não é null,
+          // ou se é null e não estamos criando (ex: logout)
+          if (next != null) _conversationId = next;
           // Reseta apenas o estado de digitação — o resto é reconstruído
           // pelo _loadConversationState após as mensagens carregarem
           _conversationState = const MindoConversationState();
@@ -314,7 +392,13 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
     final messagesAsync = _conversationId != null
         ? ref.watch(mindoMessagesProvider(_conversationId!))
         : const AsyncValue<List<AiMessage>>.data([]);
-    final messages = messagesAsync.value ?? [];
+
+    // Atualiza cache sempre que há dados reais — evita tela preta na transição
+    if (messagesAsync is AsyncData<List<AiMessage>>) {
+      _cachedMessages = messagesAsync.value!;
+    }
+
+    final messages = messagesAsync.value ?? _cachedMessages;
     final isReady = _conversationId != null && messagesAsync is! AsyncLoading;
 
     return Scaffold(
@@ -423,29 +507,28 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                 ? const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   )
-                : messagesAsync.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: AppColors.primary),
-                    ),
-                    error: (e, _) => Center(
-                      child: Text('Erro ao carregar mensagens',
-                          style: TextStyle(color: AppColors.textMuted)),
-                    ),
-                    data: (msgs) => ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      itemCount: msgs.length + (_isTyping ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == msgs.length) {
-                          return _TypingIndicator();
-                        }
-                        final msg = msgs[index];
-                        return _MessageBubble(
-                          role: msg.role,
-                          content: msg.content,
-                        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.08);
-                      },
-                    ),
+                : Stack(
+                    children: [
+                      // Exibe mensagens (cache ou atuais) — nunca deixa tela preta
+                      messagesAsync.when(
+                        loading: () => _buildMessageList(_cachedMessages, typing: false),
+                        error: (e, _) => Center(
+                          child: Text('Erro ao carregar mensagens',
+                              style: TextStyle(color: AppColors.textMuted)),
+                        ),
+                        data: (msgs) => _buildMessageList(msgs, typing: _isTyping),
+                      ),
+                      // Barra de progresso sutil no topo durante criação/carregamento
+                      if (_isCreatingConversation || messagesAsync is AsyncLoading)
+                        Positioned(
+                          top: 0, left: 0, right: 0,
+                          child: LinearProgressIndicator(
+                            minHeight: 2,
+                            backgroundColor: Colors.transparent,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                    ],
                   ),
           ),
           // Sugestões rápidas (somente início da conversa)
@@ -458,6 +541,23 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Lista de mensagens (usada para dados reais e para cache durante loading) ──
+  Widget _buildMessageList(List<AiMessage> msgs, {required bool typing}) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: msgs.length + (typing ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == msgs.length) return _TypingIndicator();
+        final msg = msgs[index];
+        return _MessageBubble(
+          role: msg.role,
+          content: msg.content,
+        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.08);
+      },
     );
   }
 
@@ -743,3 +843,7 @@ class _ChatInput extends StatelessWidget {
     );
   }
 }
+
+
+
+

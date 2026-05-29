@@ -231,9 +231,11 @@ class MoodNotifier extends _$MoodNotifier {
     final supabaseUser = ref.read(currentUserProvider);
     if (supabaseUser != null) {
       final supabase = ref.read(supabaseClientProvider);
-      supabase.from('mood_entries').insert(newEntry.toJson()).catchError((e) {
+      try {
+        await supabase.from('mood_entries').insert(newEntry.toJson());
+      } catch (_) {
         // ignore offline save error
-      });
+      }
     }
   }
 
