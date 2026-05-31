@@ -28,6 +28,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   bool _isCreatingConversation = false; // Evita criações concorrentes
   MindoConversationState _conversationState = const MindoConversationState();
   List<AiMessage> _cachedMessages = []; // Mantém mensagens visíveis durante transições
+  String? _cachedConversationId;
 
   // ID da conversa ativa (gerenciado pelo provider)
   String? _conversationId;
@@ -97,14 +98,11 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
          name = profile?.displayName ?? profile?.name ?? '';
        }
        
-       // Aguarda um frame para garantir que o provider de mensagens foi criado
-       await Future.delayed(const Duration(milliseconds: 100));
-       
        if (!mounted) return;
-       
+
        try {
-         // Aguarda o provider estar inicializado
-         final messagesNotifier = ref.read(mindoMessagesProvider(conv.id).notifier);
+         final messagesNotifier =
+             ref.read(mindoMessagesProvider(conv.id).notifier);
          await messagesNotifier.addMessage(
                content: MindoEngine.welcomeMessage(name),
                role: MessageRole.assistant,
@@ -263,7 +261,8 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
     // evitando race conditions com o ref.listen
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.bgMedium,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
@@ -278,12 +277,12 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancelar',
                 style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Nova Conversa',
                 style: TextStyle(
                     color: AppColors.primary,
@@ -393,12 +392,21 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         ? ref.watch(mindoMessagesProvider(_conversationId!))
         : const AsyncValue<List<AiMessage>>.data([]);
 
-    // Atualiza cache sempre que há dados reais — evita tela preta na transição
-    if (messagesAsync is AsyncData<List<AiMessage>>) {
-      _cachedMessages = messagesAsync.value!;
+    // Atualiza cache — não apaga mensagens durante troca/criação de conversa
+    if (messagesAsync is AsyncData<List<AiMessage>> && _conversationId != null) {
+      final msgs = messagesAsync.value!;
+      final sameConversation = _cachedConversationId == _conversationId;
+      if (msgs.isNotEmpty || sameConversation || !_isCreatingConversation) {
+        _cachedMessages = msgs;
+        _cachedConversationId = _conversationId;
+      }
     }
 
-    final messages = messagesAsync.value ?? _cachedMessages;
+    final useCache = _cachedConversationId == _conversationId ||
+        (_isCreatingConversation && _cachedMessages.isNotEmpty);
+    final messages = useCache && messagesAsync is AsyncLoading
+        ? _cachedMessages
+        : (messagesAsync.value ?? _cachedMessages);
     final isReady = _conversationId != null && messagesAsync is! AsyncLoading;
 
     return Scaffold(

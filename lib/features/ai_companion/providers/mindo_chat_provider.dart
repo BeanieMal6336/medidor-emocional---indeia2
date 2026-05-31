@@ -286,7 +286,17 @@ class MindoMessagesNotifier
         await _messagesBox.put(key, jsonEncode(msg.toJson()));
       }
 
-      state = AsyncValue.data(remote);
+      // Mescla remoto com local — nunca apaga mensagens recém-criadas offline
+      final local = state.value ?? [];
+      if (remote.isEmpty && local.isNotEmpty) return;
+
+      final byId = <String, AiMessage>{
+        for (final msg in local) msg.id: msg,
+        for (final msg in remote) msg.id: msg,
+      };
+      final merged = byId.values.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      state = AsyncValue.data(merged);
     } catch (_) {}
   }
 

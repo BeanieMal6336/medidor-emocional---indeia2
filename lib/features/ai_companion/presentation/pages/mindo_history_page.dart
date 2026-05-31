@@ -101,7 +101,7 @@ class MindoHistoryPage extends ConsumerWidget {
       BuildContext context, WidgetRef ref, MindoConversation conv) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.bgMedium,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -116,13 +116,13 @@ class MindoHistoryPage extends ConsumerWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar',
                 style: TextStyle(color: AppColors.textMuted)),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               await ref
                   .read(mindoConversationsProvider.notifier)
                   .deleteConversation(conv.id);
