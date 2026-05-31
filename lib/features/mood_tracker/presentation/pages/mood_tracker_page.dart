@@ -82,8 +82,10 @@ class _MoodTrackerPageState extends ConsumerState<MoodTrackerPage> {
           SnackBar(content: Text('Erro ao salvar registro: $e')),
         );
       }
-      setState(() => _isSaving = false);
-      return;
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 

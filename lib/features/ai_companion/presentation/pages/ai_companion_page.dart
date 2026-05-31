@@ -65,7 +65,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
            await _createNewConversation(silent: true);
          }
        },
-       error: (_) async {
+       error: (_, __) async {
          // Se erro, tenta criar nova conversa
          await _createNewConversation(silent: true);
        },
@@ -347,7 +347,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
               }
             }
           },
-          error: (_) {
+          error: (_, __) {
             // Se erro, garante que não fica travado
             if (!_isCreatingConversation) {
               _createNewConversation(silent: true);
