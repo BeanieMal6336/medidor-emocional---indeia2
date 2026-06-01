@@ -22,7 +22,7 @@ class UserProfileNotifier extends _$UserProfileNotifier {
   @override
   FutureOr<UserProfile> build() async {
     _userBox = await Hive.openBox(AppConstants.hiveBoxUser);
-    
+
     final localKey = ref.watch(activeUserIdProvider);
     final supabaseUser = ref.watch(currentUserProvider);
 
@@ -38,8 +38,10 @@ class UserProfileNotifier extends _$UserProfileNotifier {
 
     // Criar perfil padrão pegando e-mail e nome inseridos no login/cadastro offline
     final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-    final offlineEmail = settingsBox.get('current_offline_user_email', defaultValue: 'offline@mindflow.app') as String;
-    final offlineName = settingsBox.get('current_offline_user_name', defaultValue: '') as String;
+    final offlineEmail = settingsBox.get('current_offline_user_email',
+        defaultValue: 'offline@mindflow.app') as String;
+    final offlineName = settingsBox.get('current_offline_user_name',
+        defaultValue: '') as String;
     final resolvedName = (supabaseUser?.userMetadata?['name'] as String?) ??
         (offlineName.isNotEmpty ? offlineName : null);
 
@@ -60,10 +62,10 @@ class UserProfileNotifier extends _$UserProfileNotifier {
     final updated = currentProfile.copyWith(
       totalXp: currentProfile.totalXp + xp,
     );
-    
+
     state = AsyncValue.data(updated);
     await _userBox.put(updated.id, jsonEncode(updated.toJson()));
-    
+
     // Tentar sincronizar com Supabase se logado e online (background, sem await)
     final supabase = ref.read(supabaseClientProvider);
     final hasUser = ref.read(currentUserProvider) != null;
@@ -80,18 +82,19 @@ class UserProfileNotifier extends _$UserProfileNotifier {
 
     final now = DateTime.now();
     final lastCheck = currentProfile.lastCheckIn;
-    
+
     int newStreak = currentProfile.currentStreak;
     int longest = currentProfile.longestStreak;
-    
+
     if (lastCheck == null) {
       newStreak = 1;
     } else {
       // Normalizar datas para comparar apenas dias
       final todayDate = DateTime(now.year, now.month, now.day);
-      final lastCheckDate = DateTime(lastCheck.year, lastCheck.month, lastCheck.day);
+      final lastCheckDate =
+          DateTime(lastCheck.year, lastCheck.month, lastCheck.day);
       final difference = todayDate.difference(lastCheckDate).inDays;
-      
+
       if (difference == 1) {
         newStreak += 1;
       } else if (difference > 1) {
@@ -99,7 +102,7 @@ class UserProfileNotifier extends _$UserProfileNotifier {
       }
       // Se a diferença for 0, mantém o mesmo streak (registrou no mesmo dia)
     }
-    
+
     if (newStreak > longest) {
       longest = newStreak;
     }
@@ -127,27 +130,29 @@ class UserProfileNotifier extends _$UserProfileNotifier {
 // ── Provedor para gerenciar os registros de humor ─────────────────────────
 @riverpod
 class MoodNotifier extends _$MoodNotifier {
-  late Box _moodsBox;
+  Box? _moodsBox;
 
   @override
   FutureOr<List<EmotionEntry>> build() async {
     _moodsBox = await Hive.openBox(AppConstants.hiveBoxMoods);
-    
+
     final userId = ref.watch(activeUserIdProvider);
 
     // Carrega do Hive
     final List<EmotionEntry> localEntries = [];
-    for (var key in _moodsBox.keys) {
-      final cachedString = _moodsBox.get(key) as String?;
-      if (cachedString != null) {
-        try {
-          final map = Map<String, dynamic>.from(jsonDecode(cachedString));
-          final entry = EmotionEntry.fromJson(map);
-          if (entry.userId == userId) {
-            localEntries.add(entry);
+    if (_moodsBox != null) {
+      for (var key in _moodsBox!.keys) {
+        final cachedString = _moodsBox!.get(key) as String?;
+        if (cachedString != null) {
+          try {
+            final map = Map<String, dynamic>.from(jsonDecode(cachedString));
+            final entry = EmotionEntry.fromJson(map);
+            if (entry.userId == userId) {
+              localEntries.add(entry);
+            }
+          } catch (e) {
+            // ignora se json invalido
           }
-        } catch (e) {
-          // ignora se json invalido
         }
       }
     }
@@ -177,8 +182,10 @@ class MoodNotifier extends _$MoodNotifier {
           .toList();
 
       // Salva no Hive localmente as novas do servidor
-      for (final entry in remoteEntries) {
-        await _moodsBox.put(entry.id, jsonEncode(entry.toJson()));
+      if (_moodsBox != null) {
+        for (final entry in remoteEntries) {
+          await _moodsBox!.put(entry.id, jsonEncode(entry.toJson()));
+        }
       }
 
       state = AsyncValue.data(remoteEntries);
@@ -216,7 +223,9 @@ class MoodNotifier extends _$MoodNotifier {
     );
 
     // Salva localmente no Hive
-    await _moodsBox.put(entryId, jsonEncode(newEntry.toJson()));
+    if (_moodsBox != null) {
+      await _moodsBox!.put(entryId, jsonEncode(newEntry.toJson()));
+    }
 
     // Atualiza estado do Riverpod
     final currentList = state.value ?? [];
@@ -240,8 +249,10 @@ class MoodNotifier extends _$MoodNotifier {
   }
 
   Future<void> deleteEntry(String id) async {
-    await _moodsBox.delete(id);
-    
+    if (_moodsBox != null) {
+      await _moodsBox!.delete(id);
+    }
+
     final currentList = state.value ?? [];
     state = AsyncValue.data(currentList.where((e) => e.id != id).toList());
 
