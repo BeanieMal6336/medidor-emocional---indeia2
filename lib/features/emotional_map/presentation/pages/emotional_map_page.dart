@@ -211,6 +211,7 @@ class _DailyBreakdown extends StatelessWidget {
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
     final labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
+    final dayData = days.map((date) {
       final dayEntries = entries.where((e) {
         final localCreated = e.createdAt.toLocal();
         return localCreated.year == date.year &&
