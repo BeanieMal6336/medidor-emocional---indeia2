@@ -123,7 +123,8 @@ final _dailyTemplates = [
     'id': 'daily_water',
     'emoji': '💧',
     'title': 'Beber 2L de água',
-    'description': 'Mantenha seu corpo hidratado para ajudar na clareza mental.',
+    'description':
+        'Mantenha seu corpo hidratado para ajudar na clareza mental.',
     'xp': 20,
     'category': 'Saúde',
     'isManual': true,
@@ -132,7 +133,8 @@ final _dailyTemplates = [
     'id': 'daily_walk',
     'emoji': '🚶',
     'title': 'Caminhar 15 minutos',
-    'description': 'Uma caminhada leve ajuda a clarear a mente e reduzir o cortisol.',
+    'description':
+        'Uma caminhada leve ajuda a clarear a mente e reduzir o cortisol.',
     'xp': 30,
     'category': 'Corpo',
     'isManual': true,
@@ -141,7 +143,8 @@ final _dailyTemplates = [
     'id': 'daily_mindo',
     'emoji': '🤖',
     'title': 'Conversar com o Mindo',
-    'description': 'Abra o assistente Mindo e compartilhe como está se sentindo.',
+    'description':
+        'Abra o assistente Mindo e compartilhe como está se sentindo.',
     'xp': 25,
     'category': 'Mente',
     'isManual': false,
@@ -181,7 +184,8 @@ final _weeklyTemplates = [
     'id': 'weekly_sleep',
     'emoji': '😴',
     'title': 'Registrar humor por 5 dias',
-    'description': 'Mantenha consistência registrando seu humor por 5 dias seguidos.',
+    'description':
+        'Mantenha consistência registrando seu humor por 5 dias seguidos.',
     'xp': 150,
     'category': 'Rotina',
     'isManual': false,
@@ -190,7 +194,8 @@ final _weeklyTemplates = [
     'id': 'weekly_walk',
     'emoji': '🏃',
     'title': 'Caminhar 5 dias esta semana',
-    'description': 'Complete a missão de caminhada diária em pelo menos 5 dias.',
+    'description':
+        'Complete a missão de caminhada diária em pelo menos 5 dias.',
     'xp': 120,
     'category': 'Corpo',
     'isManual': false,
@@ -247,7 +252,8 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     if (raw == null) return {};
     try {
       final map = Map<String, dynamic>.from(jsonDecode(raw as String));
-      return map.map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
+      return map
+          .map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
     } catch (_) {
       return {};
     }
@@ -263,10 +269,12 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     final moodAsync = _ref.read(moodNotifierProvider);
     final entries = moodAsync.value ?? [];
     final now = DateTime.now();
-    final todayEntries = entries.where((e) =>
-        e.createdAt.year == now.year &&
-        e.createdAt.month == now.month &&
-        e.createdAt.day == now.day).toList();
+    final todayEntries = entries
+        .where((e) =>
+            e.createdAt.year == now.year &&
+            e.createdAt.month == now.month &&
+            e.createdAt.day == now.day)
+        .toList();
 
     var daily = List<MissionData>.from(state.daily);
     var weekly = List<MissionData>.from(state.weekly);
@@ -363,9 +371,6 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
       state = state.copyWith(daily: daily);
       await _saveStates(_todayKey, daily);
     }
-
-    // Missão semanal de respiração: incrementa se a mensagem inclui exercício
-    await _incrementBreathingSession();
   }
 
   /// Chamado quando o usuário salva um registro de humor
@@ -437,9 +442,8 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     final now = DateTime.now();
     final key = '${_userId}_walk_days_${now.year}_${_isoWeekNumber(now)}';
     final raw = _missionsBox.get(key);
-    final Set<String> days = raw != null
-        ? Set<String>.from(jsonDecode(raw as String) as List)
-        : {};
+    final Set<String> days =
+        raw != null ? Set<String>.from(jsonDecode(raw as String) as List) : {};
     days.add('${now.month}_${now.day}');
     await _missionsBox.put(key, jsonEncode(days.toList()));
     await _autoUpdateProgress();
