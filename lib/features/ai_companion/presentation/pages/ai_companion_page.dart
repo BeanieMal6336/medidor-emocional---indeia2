@@ -6,6 +6,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/gradient_button.dart';
 import '../../../../core/domain/enums/level_type.dart';
 import '../../../../core/services/mindo_engine.dart';
+import '../../../../core/services/mindo_knowledge_base.dart';
 import '../../../../core/domain/entities/ai_message.dart';
 import '../../../../core/domain/entities/mindo_conversation.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
@@ -36,6 +37,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   @override
   void initState() {
     super.initState();
+    MindoKnowledgeBase.instance.ensureLoaded();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureActiveConversation();
     });
@@ -206,9 +208,9 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
       final moods = ref.read(moodNotifierProvider).value ?? [];
       final now = DateTime.now();
       final loggedToday = moods.any((e) =>
-          e.createdAt.year == now.year &&
-          e.createdAt.month == now.month &&
-          e.createdAt.day == now.day);
+          e.createdAt.toLocal().year == now.year &&
+          e.createdAt.toLocal().month == now.month &&
+          e.createdAt.toLocal().day == now.day);
       final days = profile == null
           ? 1
           : DateTime.now().difference(profile.createdAt).inDays + 1;
@@ -230,8 +232,21 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
         user: userCtx,
       );
 
+      await MindoKnowledgeBase.instance.ensureLoaded();
+      final topic = reply.state.lastTopic;
+      final skipKnowledge = topic == 'crise' ||
+          topic == 'saudacao' ||
+          reply.state.inCrisis;
+      final enrichedText = skipKnowledge
+          ? reply.text
+          : MindoKnowledgeBase.instance.enrichResponse(
+              baseResponse: reply.text,
+              query: text,
+              topic: topic,
+            );
+
       // Delay proporcional ao tamanho da resposta (simula digitação)
-      final delayMs = 600 + (reply.text.length * 2).clamp(0, 2000);
+      final delayMs = 600 + (enrichedText.length * 2).clamp(0, 2500);
       await Future.delayed(Duration(milliseconds: delayMs));
 
       if (!mounted) return;
@@ -245,7 +260,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
       await ref
           .read(mindoMessagesProvider(_conversationId!).notifier)
-          .addMessage(content: reply.text, role: MessageRole.assistant);
+          .addMessage(content: enrichedText, role: MessageRole.assistant);
 
       _scrollToBottom();
     } catch (_) {
@@ -394,7 +409,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
 
     // Atualiza cache — não apaga mensagens durante troca/criação de conversa
     if (messagesAsync is AsyncData<List<AiMessage>> && _conversationId != null) {
-      final msgs = messagesAsync.value!;
+      final msgs = messagesAsync.value;
       final sameConversation = _cachedConversationId == _conversationId;
       if (msgs.isNotEmpty || sameConversation || !_isCreatingConversation) {
         _cachedMessages = msgs;
@@ -427,7 +442,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
             Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: AppColors.gradientPrimary,
                 shape: BoxShape.circle,
               ),
@@ -448,7 +463,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                     Container(
                       width: 6,
                       height: 6,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.accentGreen,
                         shape: BoxShape.circle,
                       ),
@@ -492,7 +507,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
               horizontal: AppSpacing.md,
               vertical: AppSpacing.sm,
             ),
-            color: AppColors.accent.withOpacity(0.08),
+            color: AppColors.accent.withValues(alpha: 0.08),
             child: const Row(
               children: [
                 Text('💜', style: TextStyle(fontSize: 13)),
@@ -520,7 +535,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                       // Exibe mensagens (cache ou atuais) — nunca deixa tela preta
                       messagesAsync.when(
                         loading: () => _buildMessageList(_cachedMessages, typing: false),
-                        error: (e, _) => Center(
+                        error: (e, _) => const Center(
                           child: Text('Erro ao carregar mensagens',
                               style: TextStyle(color: AppColors.textMuted)),
                         ),
@@ -528,7 +543,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                       ),
                       // Barra de progresso sutil no topo durante criação/carregamento
                       if (_isCreatingConversation || messagesAsync is AsyncLoading)
-                        Positioned(
+                        const Positioned(
                           top: 0, left: 0, right: 0,
                           child: LinearProgressIndicator(
                             minHeight: 2,
@@ -632,7 +647,7 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
                     color: AppColors.textPrimary)),
             const SizedBox(height: AppSpacing.md),
             const Text(
-              'O Mindo é um motor emocional local (sem API) com:\n\n• 🧠 Memória da conversa e rapport progressivo\n• 🧘 Meditação guiada passo a passo\n• 📓 Técnicas CBT (reestruturação de pensamentos)\n• 🌿 Grounding, respiração e regulação\n• 📊 Contexto do seu perfil e jornada no app\n\n⚠️ Não substitui psicólogo/terapeuta. Crise: CVV **188**.',
+              'O Mindo é um motor emocional local (sem API) com:\n\n• 🧠 Memória da conversa e rapport progressivo\n• 📚 Base de conhecimento em psicologia, psicanálise e comportamento (12 referências acadêmicas)\n• 🧘 Meditação guiada passo a passo\n• 📓 Técnicas CBT (reestruturação de pensamentos)\n• 🌿 Grounding, respiração e regulação\n• 📊 Contexto do seu perfil e jornada no app\n\n⚠️ Não substitui psicólogo/terapeuta. Crise: CVV **188**.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary,
@@ -675,7 +690,7 @@ class _MessageBubble extends StatelessWidget {
             Container(
               width: 28,
               height: 28,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: AppColors.gradientPrimary,
                 shape: BoxShape.circle,
               ),
@@ -731,7 +746,7 @@ class _TypingIndicator extends StatelessWidget {
           Container(
             width: 28,
             height: 28,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: AppColors.gradientPrimary,
               shape: BoxShape.circle,
             ),
@@ -759,7 +774,7 @@ class _TypingIndicator extends StatelessWidget {
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   width: 6,
                   height: 6,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),

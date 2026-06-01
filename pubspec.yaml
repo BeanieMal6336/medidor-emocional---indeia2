@@ -120,6 +120,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/rive/
+    - assets/data/mindo_psychology_knowledge.json
 
 flutter_launcher_icons:
   android: true

@@ -271,9 +271,9 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
     final now = DateTime.now();
     final todayEntries = entries
         .where((e) =>
-            e.createdAt.year == now.year &&
-            e.createdAt.month == now.month &&
-            e.createdAt.day == now.day)
+            e.createdAt.toLocal().year == now.year &&
+            e.createdAt.toLocal().month == now.month &&
+            e.createdAt.toLocal().day == now.day)
         .toList();
 
     var daily = List<MissionData>.from(state.daily);
@@ -338,7 +338,7 @@ class MissionsNotifier extends StateNotifier<MissionsState> {
   int _countDaysWithMoodThisWeek(List entries, DateTime now) {
     final Set<String> days = {};
     for (final e in entries) {
-      final d = e.createdAt;
+      final d = e.createdAt.toLocal();
       if (_isoWeekNumber(d) == _isoWeekNumber(now) && d.year == now.year) {
         days.add('${d.month}_${d.day}');
       }

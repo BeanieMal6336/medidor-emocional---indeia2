@@ -62,7 +62,8 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   List<EmotionEntry> _getEventsForDay(DateTime day, List<EmotionEntry> entries) {
     final normalizedKey = DateTime(day.year, day.month, day.day);
     return entries.where((e) {
-      final date = DateTime(e.createdAt.year, e.createdAt.month, e.createdAt.day);
+      final localCreated = e.createdAt.toLocal();
+      final date = DateTime(localCreated.year, localCreated.month, localCreated.day);
       return isSameDay(date, normalizedKey);
     }).toList();
   }
@@ -379,11 +380,11 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
   }
 
   Widget _buildMonthlySummary(List<EmotionEntry> entries) {
-    final monthEntries = entries.where((e) => e.createdAt.year == _focusedDay.year && e.createdAt.month == _focusedDay.month).toList();
+    final monthEntries = entries.where((e) => e.createdAt.toLocal().year == _focusedDay.year && e.createdAt.toLocal().month == _focusedDay.month).toList();
     if (monthEntries.isEmpty) return const SizedBox();
 
     final double avgMood = monthEntries.fold<int>(0, (sum, e) => sum + e.overallMood) / monthEntries.length;
-    final Set<String> activeDays = monthEntries.map((e) => '${e.createdAt.day}').toSet();
+    final Set<String> activeDays = monthEntries.map((e) => '${e.createdAt.toLocal().day}').toSet();
     
     // Most common emotion
     final emotionCounts = <String, int>{};

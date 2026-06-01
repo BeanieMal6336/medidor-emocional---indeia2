@@ -50,6 +50,7 @@ class _MoodTrackerPageState extends ConsumerState<MoodTrackerPage> {
   }
 
   Future<void> _save() async {
+    if (_isSaving) return;
     setState(() => _isSaving = true);
     try {
       final emotions = _selectedEmotions.map((type) {

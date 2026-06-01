@@ -351,26 +351,34 @@ class MindoEngine {
       'meditação guiada', 'meditacao guiada', 'me guie', 'me guia',
       'quero meditar', 'iniciar meditação', 'iniciar meditacao',
       'sessão guiada', 'sessao guiada',
-    ])) return _Topic.meditation;
+    ])) {
+      return _Topic.meditation;
+    }
 
     // CBT
     if (_any(lower, [
       'pensamento negativo', 'nao consigo parar de pensar', 'não consigo parar de pensar',
       'ruminação', 'ruminacao', 'mente acelerada', 'reformular pensamento',
       'pensamento automático', 'loop na cabeça',
-    ])) return _Topic.cbtReframe;
+    ])) {
+      return _Topic.cbtReframe;
+    }
 
     // Respiração sem meditação guiada
     if (_any(lower, [
       'técnica de respiração', 'tecnica de respiracao', 'respiração 4', 'box breathing',
       'quero respirar', 'me ensina a respirar',
-    ])) return _Topic.breathing;
+    ])) {
+      return _Topic.breathing;
+    }
 
     // Sono — antes de estresse (cansado pode ser das duas)
     if (_any(lower, [
       'insônia', 'insonia', 'não consigo dormir', 'nao consigo dormir',
       'acordando muito', 'sono ruim', 'dormir mal',
-    ])) return _Topic.sleep;
+    ])) {
+      return _Topic.sleep;
+    }
 
     // Crise (já tratada acima, mas mantém consistência)
     if (_hasCrisis(lower)) return _Topic.crisis;
@@ -380,7 +388,9 @@ class MindoEngine {
       'ansiedade', 'ansioso', 'ansiosa', 'angústia', 'angustia',
       'ataque de pânico', 'panico', 'coração acelerado', 'tensão no peito',
       'preocupado', 'preocupada', 'nervoso demais', 'nervosa demais',
-    ])) return _Topic.anxiety;
+    ])) {
+      return _Topic.anxiety;
+    }
 
     // Tristeza — específicas
     if (_any(lower, [
@@ -388,33 +398,43 @@ class MindoEngine {
       'deprimido', 'deprimida', 'depressão', 'depressao',
       'sem esperança', 'sem esperanca', 'vazio', 'vazia',
       'desmotivado', 'desmotivada',
-    ])) return _Topic.sadness;
+    ])) {
+      return _Topic.sadness;
+    }
 
     // Raiva
     if (_any(lower, [
       'raiva', 'com raiva', 'com ódio', 'ódio', 'odio',
       'frustrado', 'frustrada', 'irritado', 'irritada',
       'bravo', 'brava', 'com raiva de',
-    ])) return _Topic.anger;
+    ])) {
+      return _Topic.anger;
+    }
 
     // Solidão
     if (_any(lower, [
       'sozinho', 'sozinha', 'solidão', 'solidao',
       'me sinto isolado', 'me sinto isolada', 'ninguém me entende',
       'ninguem me entende', 'sem amigos', 'sem apoio',
-    ])) return _Topic.loneliness;
+    ])) {
+      return _Topic.loneliness;
+    }
 
     // Estresse / burnout
     if (_any(lower, [
       'estressado', 'estressada', 'estresse', 'sobrecarregado', 'sobrecarregada',
       'burnout', 'esgotado', 'esgotada', 'não aguento mais', 'nao aguento mais',
-    ])) return _Topic.stress;
+    ])) {
+      return _Topic.stress;
+    }
 
     // Medo — específico
     if (_any(lower, [
       'com medo de', 'tenho medo de', 'medo de', 'assustado', 'assustada',
       'fobia', 'pavor de',
-    ])) return _Topic.fear;
+    ])) {
+      return _Topic.fear;
+    }
 
     // Sono (genérico, depois do específico)
     if (_any(lower, ['cansado', 'cansada', 'exausto', 'exausta', 'sem dormir', 'dormir'])) {
@@ -429,32 +449,42 @@ class MindoEngine {
       'meu namorado', 'minha namorada', 'meu parceiro', 'minha parceira',
       'término', 'termino', 'separação', 'separacao', 'brigar com',
       'relacionamento', 'namoro',
-    ])) return _Topic.relationship;
+    ])) {
+      return _Topic.relationship;
+    }
 
     // Família
     if (_any(lower, [
       'minha mãe', 'meu pai', 'minha familia', 'minha família',
       'meu irmão', 'minha irmã', 'briga em casa', 'conflito familiar',
-    ])) return _Topic.family;
+    ])) {
+      return _Topic.family;
+    }
 
     // Trabalho / estudo
     if (_any(lower, [
       'meu trabalho', 'no trabalho', 'meu chefe', 'minha chefe',
       'faculdade', 'escola', 'prova amanhã', 'demitido', 'demitida',
       'perdi o emprego', 'entrevista',
-    ])) return _Topic.work;
+    ])) {
+      return _Topic.work;
+    }
 
     // Gratidão
     if (_any(lower, [
       'obrigado', 'obrigada', 'valeu', 'muito obrigado', 'muito obrigada',
       'me ajudou', 'você ajudou', 'grato', 'grata',
-    ])) return _Topic.gratitude;
+    ])) {
+      return _Topic.gratitude;
+    }
 
     // Confusão
     if (_any(lower, [
       'não sei o que sinto', 'nao sei o que sinto',
       'confuso', 'confusa', 'perdido', 'perdida', 'não sei', 'nao sei',
-    ])) return _Topic.confusion;
+    ])) {
+      return _Topic.confusion;
+    }
 
     // Saudação simples — só se a mensagem for curta
     if (lower.length < 35 &&
@@ -896,7 +926,8 @@ Vamos devagar. Onde no corpo você percebe alguma sensação agora — peito, es
   static String welcomeMessage(String name) {
     final n = name.isNotEmpty ? ', $name' : '';
     return 'Oi$n! 💜 Sou o **Mindo**, companheiro emocional do MindFlow.\n\n'
-        'Estou aqui para ouvir, apoiar e oferecer técnicas de mindfulness e CBT — '
+        'Estou aqui para ouvir, apoiar e oferecer técnicas de mindfulness e CBT, '
+        'com apoio em referências de psicologia, psicanálise e neurociências — '
         'sem substituir um profissional de saúde mental.\n\n'
         'Como você está se sentindo agora?';
   }

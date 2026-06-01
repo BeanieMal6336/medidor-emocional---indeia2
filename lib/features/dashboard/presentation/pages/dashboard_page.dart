@@ -332,9 +332,10 @@ class _WeeklyMoodChart extends ConsumerWidget {
           weekdayLabels.add(_getWeekdayAbbreviation(date.weekday));
 
           final dayEntries = entries.where((e) {
-            return e.createdAt.year == date.year &&
-                e.createdAt.month == date.month &&
-                e.createdAt.day == date.day;
+            final localCreated = e.createdAt.toLocal();
+            return localCreated.year == date.year &&
+                localCreated.month == date.month &&
+                localCreated.day == date.day;
           }).toList();
 
           double avg = 5.0; // Padrão se não houver registros
@@ -468,9 +469,9 @@ class _InsightCard extends ConsumerWidget {
       final totalXp = profile?.totalXp ?? 0;
       final now = DateTime.now();
       final todayEntries = entries.where((e) =>
-        e.createdAt.year == now.year &&
-        e.createdAt.month == now.month &&
-        e.createdAt.day == now.day).toList();
+        e.createdAt.toLocal().year == now.year &&
+        e.createdAt.toLocal().month == now.month &&
+        e.createdAt.toLocal().day == now.day).toList();
       final recentEntries = entries.take(7).toList();
 
       if (streak >= 7) {

@@ -4,9 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
+  audioplayers_windows
   connectivity_plus
   flutter_secure_storage_windows
   flutter_tts
+  geolocator_windows
   local_auth_windows
   printing
   rive_native

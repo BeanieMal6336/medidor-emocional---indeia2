@@ -94,7 +94,7 @@ class _WeekView extends StatelessWidget {
 
   List<EmotionEntry> get _lastWeekEntries {
     final cutoff = DateTime.now().subtract(const Duration(days: 7));
-    return entries.where((e) => e.createdAt.isAfter(cutoff)).toList();
+    return entries.where((e) => e.createdAt.toLocal().isAfter(cutoff)).toList();
   }
 
   @override
@@ -211,11 +211,11 @@ class _DailyBreakdown extends StatelessWidget {
     final days = List.generate(7, (i) => now.subtract(Duration(days: 6 - i)));
     final labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
-    final dayData = days.map((date) {
       final dayEntries = entries.where((e) {
-        return e.createdAt.year == date.year &&
-            e.createdAt.month == date.month &&
-            e.createdAt.day == date.day;
+        final localCreated = e.createdAt.toLocal();
+        return localCreated.year == date.year &&
+            localCreated.month == date.month &&
+            localCreated.day == date.day;
       }).toList();
 
       double mood = 0;
@@ -314,17 +314,17 @@ class _MonthView extends StatelessWidget {
     final title = monthLabel[0].toUpperCase() + monthLabel.substring(1);
     final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
     final monthEntries = entries
-        .where((e) => e.createdAt.year == now.year && e.createdAt.month == now.month)
+        .where((e) => e.createdAt.toLocal().year == now.year && e.createdAt.toLocal().month == now.month)
         .toList();
     final daysWithData = <int>{};
     final dayMoods = <int, double>{};
     for (final e in monthEntries) {
-      final d = e.createdAt.day;
+      final d = e.createdAt.toLocal().day;
       daysWithData.add(d);
       dayMoods[d] = ((dayMoods[d] ?? 0) + e.overallMood);
     }
     for (final d in dayMoods.keys.toList()) {
-      final count = monthEntries.where((e) => e.createdAt.day == d).length;
+      final count = monthEntries.where((e) => e.createdAt.toLocal().day == d).length;
       if (count > 0) dayMoods[d] = dayMoods[d]! / count;
     }
     final avgMood = monthEntries.isEmpty
@@ -702,12 +702,12 @@ class _HeatmapGrid extends StatelessWidget {
     // Build per-day averages
     final Map<int, double> dayAverages = {};
     for (final entry in entries) {
-      final day = entry.createdAt.day;
+      final day = entry.createdAt.toLocal().day;
       dayAverages[day] = (dayAverages[day] ?? 0) + entry.overallMood;
     }
     final Map<int, int> dayCounts = {};
     for (final entry in entries) {
-      final day = entry.createdAt.day;
+      final day = entry.createdAt.toLocal().day;
       dayCounts[day] = (dayCounts[day] ?? 0) + 1;
     }
     final Map<int, double> dayMoods = {};
@@ -933,8 +933,8 @@ class _PatternsView extends StatelessWidget {
     final patterns = <(String, String, String, Color)>[];
 
     // Pattern 1: Night hours mood
-    final nightEntries = entries.where((e) => e.createdAt.hour >= 21).toList();
-    final dayEntries = entries.where((e) => e.createdAt.hour < 18).toList();
+    final nightEntries = entries.where((e) => e.createdAt.toLocal().hour >= 21).toList();
+    final dayEntries = entries.where((e) => e.createdAt.toLocal().hour < 18).toList();
     if (nightEntries.length >= 2 && dayEntries.isNotEmpty) {
       final nightAvg = nightEntries.fold(0, (s, e) => s + e.overallMood) / nightEntries.length;
       final dayAvg = dayEntries.fold(0, (s, e) => s + e.overallMood) / dayEntries.length;
