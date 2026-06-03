@@ -81,11 +81,6 @@ class AuthNotifier extends _$AuthNotifier {
     final trimmedEmail = email.trim();
     final trimmedName = name.trim();
     final localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
-    final previousId = settingsBox.get('current_offline_user_id') as String?;
-    if (previousId != null && previousId != localId) {
-      await userBox.delete(previousId);
-      await clearUserScopedData(previousId);
-    }
     final credentials = {
       'id': localId,
       'email': trimmedEmail,
@@ -144,18 +139,32 @@ class AuthNotifier extends _$AuthNotifier {
     state = const AsyncValue.loading();
     final userBox = Hive.box(AppConstants.hiveBoxUser);
     final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
-    final localId = 'google_${DateTime.now().millisecondsSinceEpoch}';
     final trimmedEmail = email.trim();
     final trimmedName = name.trim();
-    await userBox.put(
-      'credentials_$trimmedEmail',
-      jsonEncode({
-        'id': localId,
-        'email': trimmedEmail,
-        'name': trimmedName,
-        'password': 'google_simulated_password_123',
-      }),
-    );
+
+    // Reutiliza o ID local existente se este e-mail já logou antes
+    final localData = userBox.get('credentials_$trimmedEmail');
+    String localId;
+    if (localData != null) {
+      try {
+        final userMap = Map<String, dynamic>.from(jsonDecode(localData as String));
+        localId = userMap['id'] as String;
+      } catch (_) {
+        localId = 'google_${DateTime.now().millisecondsSinceEpoch}';
+      }
+    } else {
+      localId = 'google_${DateTime.now().millisecondsSinceEpoch}';
+      await userBox.put(
+        'credentials_$trimmedEmail',
+        jsonEncode({
+          'id': localId,
+          'email': trimmedEmail,
+          'name': trimmedName,
+          'password': 'google_simulated_password_123',
+        }),
+      );
+    }
+
     final registryList = settingsBox.get('offline_email_registry', defaultValue: <dynamic>[]) as List;
     final updatedList = List<String>.from(registryList.map((e) => e.toString()));
     if (!updatedList.contains(trimmedEmail)) {
@@ -168,7 +177,7 @@ class AuthNotifier extends _$AuthNotifier {
       email: trimmedEmail,
       name: trimmedName,
       offlineMode: true,
-      isNewUser: true,
+      isNewUser: false,
     );
     state = const AsyncValue.data(null);
   }

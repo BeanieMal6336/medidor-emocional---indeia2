@@ -27,14 +27,36 @@ class UserProfileNotifier extends _$UserProfileNotifier {
     final supabaseUser = ref.watch(currentUserProvider);
 
     final cachedData = _userBox.get(localKey);
+    UserProfile? profile;
     if (cachedData != null) {
       try {
         final map = Map<String, dynamic>.from(jsonDecode(cachedData as String));
-        return UserProfile.fromJson(map);
+        profile = UserProfile.fromJson(map);
       } catch (e) {
         // Fallback se JSON corrompido
       }
     }
+
+    if (supabaseUser != null) {
+      try {
+        final supabase = ref.read(supabaseClientProvider);
+        final response = await supabase
+            .from('profiles')
+            .select()
+            .eq('id', localKey)
+            .maybeSingle();
+
+        if (response != null) {
+          final remoteProfile = UserProfile.fromJson(Map<String, dynamic>.from(response));
+          if (profile == null || remoteProfile.totalXp > profile.totalXp) {
+            profile = remoteProfile;
+            await _userBox.put(localKey, jsonEncode(profile.toJson()));
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (profile != null) return profile;
 
     // Criar perfil padrão pegando e-mail e nome inseridos no login/cadastro offline
     final settingsBox = Hive.box(AppConstants.hiveBoxSettings);
@@ -181,6 +203,31 @@ class MoodNotifier extends _$MoodNotifier {
           .map((e) => EmotionEntry.fromJson(Map<String, dynamic>.from(e)))
           .toList();
 
+      // Carrega registros locais do Hive para identificar os locais que precisam subir
+      final List<EmotionEntry> local = [];
+      if (_moodsBox != null) {
+        for (var key in _moodsBox!.keys) {
+          final cachedString = _moodsBox!.get(key) as String?;
+          if (cachedString != null) {
+            try {
+              final map = Map<String, dynamic>.from(jsonDecode(cachedString));
+              final entry = EmotionEntry.fromJson(map);
+              if (entry.userId == userId) {
+                local.add(entry);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      // Envia registros criados offline para o Supabase
+      final remoteIds = remoteEntries.map((e) => e.id).toSet();
+      for (final entry in local) {
+        if (!remoteIds.contains(entry.id)) {
+          supabase.from('mood_entries').insert(entry.toJson()).catchError((_) {});
+        }
+      }
+
       // Salva no Hive localmente as novas do servidor
       if (_moodsBox != null) {
         for (final entry in remoteEntries) {
@@ -188,7 +235,16 @@ class MoodNotifier extends _$MoodNotifier {
         }
       }
 
-      state = AsyncValue.data(remoteEntries);
+      // Mescla local e remoto para não perder dados na UI
+      final byId = <String, EmotionEntry>{
+        for (final entry in local) entry.id: entry,
+        for (final entry in remoteEntries) entry.id: entry,
+      };
+
+      final merged = byId.values.toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      state = AsyncValue.data(merged);
     } catch (e) {
       // Falhou em sincronizar, continua usando local (silencioso)
     }

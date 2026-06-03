@@ -82,6 +82,39 @@ class NotificationService {
     '🎯 Foco: qual é a UMA coisa mais importante que você pode fazer hoje?',
   ];
 
+  static const _motivationalAndSelfHelpMessages = [
+    '🍀 O progresso não é linear. Respeite seu próprio ritmo e continue caminhando.',
+    '💫 Um pequeno passo hoje é melhor do que nenhum passo. Celebre suas pequenas vitórias!',
+    '🌱 Cultive pensamentos bons. Sua mente é um jardim que floresce com o que você rega.',
+    '🌈 Você já superou dias que pensava não conseguir. Orgulhe-se da sua resiliência!',
+    '💎 A sua jornada é única. Evite se comparar com a velocidade dos outros.',
+    '💪 Você é forte o suficiente para recomeçar quantas vezes forem necessárias.',
+    '🍃 Permita-se sentir, mas também permita-se deixar ir o que já passou.',
+    '✨ A paz mental começa quando você decide não permitir que os outros controlem suas emoções.',
+    '🌻 Seja gentil com a sua mente hoje. Ela trabalha duro por você.',
+    '🔋 Está tudo bem fazer uma pausa para recarregar as energias. Descanso é produtivo.',
+    '🌟 Você é a única pessoa responsável por construir a sua própria felicidade. Comece agora.',
+    '🦄 A sua autenticidade é o seu maior superpoder. Não tente se encaixar em padrões.',
+    '🧡 Valorize quem você é. Suas falhas fazem parte da sua beleza única.',
+    '🧘 O momento presente é o único lugar onde a vida realmente acontece. Esteja aqui.',
+    '🌷 A paciência consigo mesmo(a) é o maior ato de amor-próprio que você pode praticar.',
+    '🌍 O mundo é um lugar melhor porque você está nele. Nunca se esqueça disso.',
+    '🦋 Mudar é difícil, mas permanecer no mesmo lugar sem evoluir é ainda mais doloroso.',
+    '🧸 Acolha seus sentimentos difíceis. Eles também têm algo a te ensinar.',
+    '🔑 A chave para o seu bem-estar está nas suas escolhas diárias de autocuidado.',
+    '☀️ Cada amanhecer traz consigo uma nova página em branco. O que você vai escrever hoje?',
+    '🧘‍♀️ Inspire paz, expire preocupação. Deixe de lado o que você não pode controlar.',
+    '🌸 Você merece o mesmo carinho e paciência que distribui tão generosamente aos outros.',
+    '💫 Acredite na sua capacidade de transformar desafios em aprendizado.',
+    '🌈 Seus limites merecem respeito. Dizer "não" para os outros pode ser um "sim" para você.',
+    '🔮 A resposta para a maior parte das suas dúvidas está no silêncio da sua mente.',
+    '🌿 Cuide de você hoje como se você fosse a pessoa mais importante do mundo. Porque você é.',
+    '🍀 Não desista nas primeiras dificuldades. As flores mais bonitas crescem após a chuva.',
+    '🌻 Foque no que você pode controlar e deixe o resto ir com o vento.',
+    '💎 Você tem valor simplesmente por existir, independentemente do que produz ou faz.',
+    '❤️ Diga a si mesmo(a) hoje: "Eu sou o suficiente e estou fazendo o meu melhor."',
+  ];
+
   final _random = Random();
 
   // ── Inicialização ─────────────────────────────────────────────────────────
@@ -131,10 +164,13 @@ class NotificationService {
     final silentEnd = settingsBox.get('silent_end_hour', defaultValue: 7) as int;
 
     final now = DateTime.now();
+    int totalMinutes = 0;
 
-    // Agenda 20 notificações ao longo de 30 horas (a cada 90 min)
-    for (int i = 0; i < 20; i++) {
-      final scheduledTime = now.add(Duration(minutes: 90 * (i + 1)));
+    // Agenda 30 notificações ao longo de intervalos aleatórios (entre 40 e 60 minutos)
+    for (int i = 0; i < 30; i++) {
+      final interval = 40 + _random.nextInt(21); // 40 + [0..20] = 40 a 60 minutos
+      totalMinutes += interval;
+      final scheduledTime = now.add(Duration(minutes: totalMinutes));
       final hour = scheduledTime.hour;
 
       // Pula horário silencioso (ex: 23h a 7h)
@@ -207,6 +243,7 @@ class NotificationService {
       _affirmationMessages,
       _breathingMessages,
       _energyMessages,
+      _motivationalAndSelfHelpMessages,
     ];
 
     final category = allCategories[_random.nextInt(allCategories.length)];

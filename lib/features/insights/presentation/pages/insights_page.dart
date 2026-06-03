@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/widgets/glass_card.dart';
+import '../../../../core/widgets/premium_gate.dart';
+import '../../../../core/domain/enums/subscription_type.dart';
+import '../../../../core/services/subscription_service.dart';
 import '../../../../app/router/app_router.dart';
 
 class InsightsPage extends ConsumerWidget {
@@ -82,7 +85,19 @@ class InsightsPage extends ConsumerWidget {
             ),
             const SizedBox(height: AppSpacing.md),
 
-            ...insights.map((ins) => _buildInsightCard(ins)).toList(),
+            // Free tier: first 1 insight; rest locked behind Silver
+            _buildInsightCard(insights[0]),
+            PremiumGate(
+              requiredTier: SubscriptionType.silver,
+              featureName: 'Análises Avançadas',
+              featureDescription: 'Acesse todas as análises de neurociência e correlações de hábitos com o plano Silver.',
+              child: Column(
+                children: [
+                  ...insights.skip(1).map((ins) => _buildInsightCard(ins)),
+                  _buildWeeklyReportCard(),
+                ],
+              ),
+            ),
             const SizedBox(height: 80),
           ],
         ),
@@ -128,6 +143,73 @@ class InsightsPage extends ConsumerWidget {
         ],
       ),
     ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1);
+  }
+
+  Widget _buildWeeklyReportCard() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: GlassCard(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E1E35), Color(0xFF252545)],
+        ),
+        borderColor: AppColors.primary.withOpacity(0.4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text('📊', style: TextStyle(fontSize: 18)),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('RELATÓRIO SEMANAL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 0.5)),
+                    SizedBox(height: 2),
+                    Text('Semana de 27/05 a 02/06', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  ],
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentGreen.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('🥈 Silver', style: TextStyle(fontSize: 10, color: AppColors.accentGreen, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            _statRow('Registros de humor', '7 / 7 dias', AppColors.accentGreen),
+            _statRow('Emoção dominante', 'Motivação 💪', AppColors.accent),
+            _statRow('Nível médio de intensidade', '5.4 / 10', AppColors.accentBlue),
+            _statRow('XP ganho na semana', '+320 XP', AppColors.primary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+          Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
+    );
   }
 
   Widget _buildInsightCard(_InsightCardModel ins) {

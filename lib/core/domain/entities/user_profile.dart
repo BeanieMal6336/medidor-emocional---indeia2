@@ -1,4 +1,5 @@
 import '../enums/level_type.dart';
+import '../enums/subscription_type.dart';
 
 class UserProfile {
   final String id;
@@ -14,6 +15,8 @@ class UserProfile {
   final String? reminderTime;
   final bool biometricEnabled;
   final bool isOnboardingDone;
+  final SubscriptionType subscription;
+  final DateTime? subscriptionExpiresAt;
 
   const UserProfile({
     required this.id,
@@ -29,6 +32,8 @@ class UserProfile {
     this.reminderTime,
     this.biometricEnabled = false,
     this.isOnboardingDone = false,
+    this.subscription = SubscriptionType.free,
+    this.subscriptionExpiresAt,
   });
 
   LevelType get level => LevelType.fromXp(totalXp);
@@ -55,6 +60,10 @@ class UserProfile {
 
   String get displayName => name ?? email.split('@').first;
 
+  bool get isPremium => subscription.isPremium;
+  bool get isGold    => subscription.isGold;
+  bool get isSilver  => subscription.isSilver;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'email': email,
@@ -69,6 +78,8 @@ class UserProfile {
     'reminder_time': reminderTime,
     'biometric_enabled': biometricEnabled,
     'is_onboarding_done': isOnboardingDone,
+    'subscription': subscription.toJson(),
+    'subscription_expires_at': subscriptionExpiresAt?.toIso8601String(),
   };
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
@@ -87,6 +98,10 @@ class UserProfile {
     reminderTime: json['reminder_time'] as String?,
     biometricEnabled: json['biometric_enabled'] as bool? ?? false,
     isOnboardingDone: json['is_onboarding_done'] as bool? ?? false,
+    subscription: SubscriptionType.fromJson(json['subscription'] as String?),
+    subscriptionExpiresAt: json['subscription_expires_at'] != null
+        ? DateTime.tryParse(json['subscription_expires_at'] as String)
+        : null,
   );
 
   UserProfile copyWith({
@@ -103,6 +118,8 @@ class UserProfile {
     String? reminderTime,
     bool? biometricEnabled,
     bool? isOnboardingDone,
+    SubscriptionType? subscription,
+    DateTime? subscriptionExpiresAt,
   }) => UserProfile(
     id: id ?? this.id,
     email: email ?? this.email,
@@ -117,5 +134,7 @@ class UserProfile {
     reminderTime: reminderTime ?? this.reminderTime,
     biometricEnabled: biometricEnabled ?? this.biometricEnabled,
     isOnboardingDone: isOnboardingDone ?? this.isOnboardingDone,
+    subscription: subscription ?? this.subscription,
+    subscriptionExpiresAt: subscriptionExpiresAt ?? this.subscriptionExpiresAt,
   );
 }

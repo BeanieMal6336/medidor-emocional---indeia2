@@ -13,6 +13,7 @@ import '../../../../app/router/app_router.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../providers/auth_provider.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
+import '../../../../core/services/subscription_service.dart';
 
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
@@ -23,6 +24,7 @@ class ProfilePage extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileNotifierProvider);
     final profile = profileAsync.value;
     
+    final subscriptionType = ref.watch(subscriptionProvider);
     final String displayName = profile?.displayName ?? user?.email?.split('@').first ?? 'Viajante';
     final String email = profile?.email ?? user?.email ?? 'offline@mindflow.app';
     final int streak = profile?.currentStreak ?? 0;
@@ -216,19 +218,53 @@ class ProfilePage extends ConsumerWidget {
                     trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
                   ),
                   const Divider(),
-                  ListTile(
-                    onTap: () {},
+                   ListTile(
+                    onTap: () => context.push(AppRoutes.premium),
                     leading: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.accent.withOpacity(0.15),
+                        color: subscriptionType.isGold
+                            ? const Color(0xFFFFD700).withOpacity(0.15)
+                            : AppColors.accent.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.star_rounded, color: AppColors.accent, size: 20),
+                      child: Icon(
+                        Icons.workspace_premium_rounded,
+                        color: subscriptionType.isGold
+                            ? const Color(0xFFFFD700)
+                            : AppColors.accent,
+                        size: 20,
+                      ),
                     ),
                     title: const Text('MindFlow Premium', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    subtitle: const Text('Desbloquear relatórios completos e voz IA', style: TextStyle(fontSize: 11)),
-                    trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                    subtitle: Text(
+                      subscriptionType.isPremium
+                          ? 'Plano ${subscriptionType.label} ativo ${subscriptionType.emoji}'
+                          : 'Desbloquear relatórios, IA ilimitada e mais',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: subscriptionType.isPremium
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: subscriptionType.isGold
+                                  ? const Color(0xFFFFD700).withOpacity(0.15)
+                                  : Colors.grey.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: subscriptionType.isGold ? const Color(0xFFFFD700) : Colors.grey,
+                              ),
+                            ),
+                            child: Text(
+                              subscriptionType.label,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: subscriptionType.isGold ? const Color(0xFFFFD700) : Colors.grey[300],
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
                   ),
                   const Divider(),
                   ListTile(

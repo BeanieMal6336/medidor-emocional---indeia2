@@ -13,6 +13,8 @@ import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../../providers/mindo_chat_provider.dart';
 import 'mindo_history_page.dart';
+import '../../../../core/services/subscription_service.dart';
+import '../../../../app/router/app_router.dart';
 
 class AiCompanionPage extends ConsumerStatefulWidget {
   const AiCompanionPage({super.key});
@@ -186,8 +188,82 @@ class _AiCompanionPageState extends ConsumerState<AiCompanionPage> {
   // ── Envia mensagem ───────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    // Bloqueia envio duplo ou enquanto o Mindo está respondendo
     if (text.isEmpty || _conversationId == null || _isTyping) return;
+
+    // ── Limite de mensagens para usuários gratuitos ────────────────
+    final sub = ref.read(subscriptionProvider);
+    if (!sub.isGold) {
+      final allMessages = ref.read(mindoMessagesProvider(_conversationId!)).value ?? [];
+      final userMsgsToday = allMessages.where((m) {
+        final isUser = m.isUser;
+        final isToday = m.createdAt.toLocal().day == DateTime.now().day &&
+            m.createdAt.toLocal().month == DateTime.now().month &&
+            m.createdAt.toLocal().year == DateTime.now().year;
+        return isUser && isToday;
+      }).length;
+      final limit = sub.isSilver ? 30 : 10;
+      if (userMsgsToday >= limit) {
+        if (mounted) {
+          showModalBottomSheet(
+            context: context,
+            backgroundColor: Colors.transparent,
+            builder: (_) => Container(
+              padding: const EdgeInsets.all(24),
+              decoration: const BoxDecoration(
+                color: AppColors.bgCard,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.glassBorder, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(height: 20),
+                  const Text('👑', style: TextStyle(fontSize: 48)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Limite diário atingido',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xFFFFD700)),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    sub.isSilver
+                        ? 'Você usou $limit mensagens hoje. Assine o Gold para conversar sem limites com o Mindo!'
+                        : 'Você usou $limit mensagens hoje. Assine Silver (30/dia) ou Gold (ilimitado) para continuar!',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        backgroundColor: const Color(0xFFFFD700),
+                        foregroundColor: Colors.black87,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        context.push(AppRoutes.premium);
+                      },
+                      child: const Text('Ver planos Gold', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Fechar', style: TextStyle(color: AppColors.textMuted)),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+    // ───────────────────────────────────────────────────────
 
     _textController.clear();
     setState(() => _isTyping = true);

@@ -1,77 +1,178 @@
-name: Build Installers
+name: 🚀 MindFlow — Build & Release
+
 on:
   push:
     branches: [main, master]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main, master]
   workflow_dispatch:
+    inputs:
+      build_android:
+        description: 'Build Android APK?'
+        required: false
+        default: 'true'
+      build_windows:
+        description: 'Build Windows EXE?'
+        required: false
+        default: 'true'
+      build_ios:
+        description: 'Build iOS IPA?'
+        required: false
+        default: 'true'
+
 env:
   JAVA_VERSION: '17'
+  FLUTTER_VERSION: '3.22.2'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 — Análise estática (roda em todo push/PR)
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
-  build-android:
-    name: Build Android APK
+  analyze:
+    name: 🔍 Analyze & Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run analyzer
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test --coverage || true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 — Build Android APK + AAB
+# ─────────────────────────────────────────────────────────────────────────────
+  build-android:
+    name: 🤖 Android APK + AAB
+    runs-on: ubuntu-latest
+    needs: analyze
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
-      - uses: subosito/flutter-action@v2
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+
       - name: Install dependencies
         run: flutter pub get
-      - name: Generate app icons
+
+      - name: Generate icons (if script exists)
         run: |
-          pip install pillow
-          python scripts/generate_app_icons.py
+          if [ -f scripts/generate_app_icons.py ]; then
+            pip install pillow --quiet
+            python scripts/generate_app_icons.py
+          fi
+
       - name: Accept Android licenses
-        run: yes | flutter doctor --android-licenses
-      - name: Decode keystore
+        run: yes | flutter doctor --android-licenses || true
+
+      - name: Decode keystore (if secret set)
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "KEYSTORE_BASE64 not set; APK will use debug signing."
-            exit 0
+            echo "ℹ️  No keystore secret — using debug signing."
+          else
+            mkdir -p android/app
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
+            echo "✅ Keystore decoded."
           fi
-          mkdir -p android/app
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
-          test -s android/app/keystore.jks
-      - name: Build APK
+
+      - name: Build APK (release)
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-        run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build AAB (release)
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: flutter build appbundle --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
           name: mindflow-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30
-  build-windows:
-    name: Build Windows executable
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: mindflow-android-aab
+          path: build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 3 — Build Windows EXE + ZIP
+# ─────────────────────────────────────────────────────────────────────────────
+  build-windows:
+    name: 🪟 Windows EXE
+    runs-on: windows-2022
+    needs: analyze
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+
       - name: Enable Windows desktop
         run: flutter config --enable-windows-desktop
+
       - name: Install dependencies
         run: flutter pub get
-      - name: Generate app icons
+
+      - name: Generate icons (if script exists)
+        shell: pwsh
         run: |
-          pip install pillow
-          python scripts/generate_app_icons.py
-      - name: Build Windows
+          if (Test-Path "scripts/generate_app_icons.py") {
+            pip install pillow --quiet
+            python scripts/generate_app_icons.py
+          }
+
+      - name: Build Windows (release)
         run: flutter build windows --release
-      - name: Package Windows build
+
+      - name: Package Windows ZIP
         shell: pwsh
         run: |
           $candidates = @(
@@ -80,14 +181,135 @@ jobs:
           )
           $releaseDir = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $releaseDir) {
-            Get-ChildItem -Recurse build\windows -ErrorAction SilentlyContinue | Select-Object FullName
-            throw 'Windows Release output not found'
+            Get-ChildItem -Recurse build\windows | Select-Object FullName
+            throw "❌ Windows Release directory not found"
           }
           New-Item -ItemType Directory -Force -Path build\artifacts | Out-Null
           Compress-Archive -Path "$releaseDir\*" -DestinationPath build\artifacts\mindflow-windows-x64.zip -Force
-      - uses: actions/upload-artifact@v4
+          Write-Host "✅ Package created: mindflow-windows-x64.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
         with:
           name: mindflow-windows-x64
           path: build/artifacts/mindflow-windows-x64.zip
           if-no-files-found: error
           retention-days: 30
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 4 — Build iOS IPA (macOS runner)
+# ─────────────────────────────────────────────────────────────────────────────
+  build-ios:
+    name: 🍎 iOS IPA
+    runs-on: macos-14
+    needs: analyze
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no signing — for CI validation)
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA (unsigned)
+        run: |
+          mkdir -p build/ios/ipa
+          cd build/ios/Release-iphoneos
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -r ../ipa/MindFlow-unsigned.ipa Payload/
+          echo "✅ IPA created (unsigned — requires re-signing for distribution)"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindflow-ios-unsigned-ipa
+          path: build/ios/ipa/MindFlow-unsigned.ipa
+          if-no-files-found: warn
+          retention-days: 14
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 5 — GitHub Release (somente em tags v*.*.*)
+# ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: 📦 GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-android, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: mindflow-android-apk
+          path: dist/android
+
+      - name: Download Android AAB
+        uses: actions/download-artifact@v4
+        with:
+          name: mindflow-android-aab
+          path: dist/android
+
+      - name: Download Windows ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: mindflow-windows-x64
+          path: dist/windows
+
+      - name: Extract version tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "MindFlow ${{ steps.version.outputs.tag }} 🧠✨"
+          body: |
+            ## 🚀 MindFlow ${{ steps.version.outputs.tag }}
+
+            ### O que há de novo
+            - Sistema Premium Silver & Gold completo
+            - Widget PremiumGate para controle de acesso por tier
+            - Notificações motivacionais aleatórias (40–60 min)
+            - Correção de perda de dados offline
+            - Migração automática de dados Guest → Conta
+
+            ### Downloads
+            | Plataforma | Arquivo |
+            |---|---|
+            | 🤖 Android APK | `app-arm64-v8a-release.apk` (recomendado) |
+            | 🤖 Android Bundle | `app-release.aab` (para Play Store) |
+            | 🪟 Windows | `mindflow-windows-x64.zip` |
+
+            ### Instalação Android
+            1. Baixe o APK correspondente ao seu dispositivo
+            2. Habilite "Fontes desconhecidas" nas configurações
+            3. Instale e aproveite!
+
+            ### Instalação Windows
+            1. Extraia o ZIP
+            2. Execute `mindflow.exe`
+
+            ---
+            > 💡 **Plano Gold** recomendado para a experiência completa com IA ilimitada!
+          files: |
+            dist/android/*.apk
+            dist/android/*.aab
+            dist/windows/*.zip
+          draft: false
+          prerelease: false

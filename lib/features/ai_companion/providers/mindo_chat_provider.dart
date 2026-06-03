@@ -85,13 +85,64 @@ class MindoConversationsNotifier
               MindoConversation.fromJson(Map<String, dynamic>.from(e)))
           .toList();
 
+      // Carrega sessões locais do Hive para identificar as criadas offline
+      final List<MindoConversation> local = [];
+      for (final key in _conversationsBox.keys) {
+        if (!key.toString().startsWith('conv_${_userId}_')) continue;
+        final raw = _conversationsBox.get(key) as String?;
+        if (raw == null) continue;
+        try {
+          final map = Map<String, dynamic>.from(jsonDecode(raw));
+          final conv = MindoConversation.fromJson(map);
+          if (conv.userId == _userId) local.add(conv);
+        } catch (_) {}
+      }
+
+      // Sobe sessões criadas offline para o Supabase
+      final remoteIds = remote.map((c) => c.id).toSet();
+      for (final conv in local) {
+        if (!remoteIds.contains(conv.id)) {
+          supabase.from('mindo_conversations').insert(conv.toJson()).catchError((_) {});
+
+          // Também tenta subir as mensagens dessa conversa que possam ter sido geradas offline
+          try {
+            final messagesBox = await Hive.openBox(AppConstants.hiveBoxMindoMessages);
+            final prefix = 'msg_${_userId}_${conv.id}_';
+            for (final key in messagesBox.keys) {
+              if (key.toString().startsWith(prefix)) {
+                final rawMsg = messagesBox.get(key) as String?;
+                if (rawMsg != null) {
+                  final map = Map<String, dynamic>.from(jsonDecode(rawMsg));
+                  supabase.from('ai_conversations').insert({
+                    'id': map['id'],
+                    'user_id': _userId,
+                    'content': map['content'],
+                    'role': map['role'],
+                    'created_at': map['createdAt'],
+                    'conversation_id': conv.id,
+                  }).catchError((_) {});
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
       for (final conv in remote) {
         final hiveKey = 'conv_${_userId}_${conv.id}';
         await _conversationsBox.put(hiveKey, jsonEncode(conv.toJson()));
       }
 
-      remote.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      state = AsyncValue.data(remote);
+      // Mescla local e remoto para não perder dados na UI
+      final byId = <String, MindoConversation>{
+        for (final conv in local) conv.id: conv,
+        for (final conv in remote) conv.id: conv,
+      };
+
+      final merged = byId.values.toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+      state = AsyncValue.data(merged);
     } catch (_) {
       // Offline-first: continua com dados locais em caso de erro
     }
@@ -281,15 +332,40 @@ class MindoMessagesNotifier
           .map((e) => AiMessage.fromJson(Map<String, dynamic>.from(e)))
           .toList();
 
+      // Carrega mensagens locais do Hive para identificar as offline
+      final List<AiMessage> local = [];
+      final prefix = 'msg_${_userId}_${conversationId}_';
+      for (final key in _messagesBox.keys) {
+        if (!key.toString().startsWith(prefix)) continue;
+        final raw = _messagesBox.get(key) as String?;
+        if (raw == null) continue;
+        try {
+          final map = Map<String, dynamic>.from(jsonDecode(raw));
+          local.add(AiMessage.fromJson(map));
+        } catch (_) {}
+      }
+
+      // Sobe mensagens criadas offline para o Supabase
+      final remoteIds = remote.map((m) => m.id).toSet();
+      for (final msg in local) {
+        if (!remoteIds.contains(msg.id)) {
+          supabase.from('ai_conversations').insert({
+            'id': msg.id,
+            'user_id': _userId,
+            'content': msg.content,
+            'role': msg.role.name,
+            'created_at': msg.createdAt.toIso8601String(),
+            'conversation_id': conversationId,
+          }).catchError((_) {});
+        }
+      }
+
       for (final msg in remote) {
         final key = 'msg_${_userId}_${conversationId}_${msg.id}';
         await _messagesBox.put(key, jsonEncode(msg.toJson()));
       }
 
-      // Mescla remoto com local — nunca apaga mensagens recém-criadas offline
-      final local = state.value ?? [];
-      if (remote.isEmpty && local.isNotEmpty) return;
-
+      // Mescla remoto com local
       final byId = <String, AiMessage>{
         for (final msg in local) msg.id: msg,
         for (final msg in remote) msg.id: msg,

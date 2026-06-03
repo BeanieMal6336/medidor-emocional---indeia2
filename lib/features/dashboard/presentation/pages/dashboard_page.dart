@@ -13,6 +13,8 @@ import '../../../../app/router/app_router.dart';
 import '../../../mood_tracker/providers/mood_provider.dart';
 import '../../../gamification/providers/missions_provider.dart';
 import '../../../../core/services/progression_service.dart';
+import '../../../../core/services/subscription_service.dart';
+import '../../../../core/domain/enums/subscription_type.dart';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -30,6 +32,8 @@ class DashboardPage extends ConsumerWidget {
               delegate: SliverChildListDelegate([
                 const SizedBox(height: AppSpacing.md),
                 _MoodCheckInCard(),
+                const SizedBox(height: AppSpacing.md),
+                const _PremiumBannerCard(),
                 const SizedBox(height: AppSpacing.md),
                 const _XpSection(),
                 const SizedBox(height: AppSpacing.md),
@@ -136,6 +140,75 @@ class DashboardPage extends ConsumerWidget {
     if (hour < 12) return 'Bom dia ☀️';
     if (hour < 18) return 'Boa tarde 🌤️';
     return 'Boa noite 🌙';
+  }
+}
+
+// ── Premium Banner Card ──────────────────────────────────
+class _PremiumBannerCard extends ConsumerWidget {
+  const _PremiumBannerCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sub = ref.watch(subscriptionProvider);
+    if (sub.isPremium) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.premium),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF2A1A0E), Color(0xFF1E1E35)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Color(0xFFFFD700).withOpacity(0.4), width: 1.5),
+          boxShadow: [
+            BoxShadow(color: Color(0xFFFFD700).withOpacity(0.1), blurRadius: 20, spreadRadius: 0),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Text('👑', style: TextStyle(fontSize: 32)),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Desbloqueie o MindFlow Gold',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFFFD700),
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'IA ilimitada · Análise preditiva · Meditações Pro',
+                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Ver planos',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black87),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ).animate(delay: 150.ms).fadeIn(duration: 400.ms).slideY(begin: 0.1);
   }
 }
 
