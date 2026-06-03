@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import '../../constants/app_constants.dart';
-import '../../domain/enums/subscription_type.dart';
-import '../../../../features/auth/presentation/providers/auth_provider.dart';
+import '../constants/app_constants.dart';
+import '../domain/enums/subscription_type.dart';
+import '../../features/mood_tracker/providers/mood_provider.dart';
 
 // ─── Provider: subscription tier do usuário atual ────────────────────────────
 
